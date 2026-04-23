@@ -6,7 +6,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="RL Gastos">
-<meta name="theme-color" content="#FBFAF7">
+<meta name="theme-color" content="#FBFAF7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F0E0C" media="(prefers-color-scheme: dark)">
 <title>RL Gastos</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon.ico">
@@ -26,6 +27,78 @@
   --shadow-sm: 0 1px 2px rgba(0,0,0,0.04), 0 1px 1px rgba(0,0,0,0.02);
   --shadow-md: 0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
   --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px);
+}
+
+/* Dark mode automático: sigue la preferencia del sistema.
+ * Sobrescribe las variables CSS; toda la UI hereda sin tocar nada más.
+ * Los colores de marca (blue/green/yellow/red) se ajustan levemente para
+ * tener mejor contraste sobre fondos oscuros. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0F0E0C;
+    --bg-soft: #171613;
+    --surface: #1C1B19;
+    --surface-2: #242220;
+    --surface-3: #2E2C28;
+    --line: rgba(255,255,255,0.07);
+    --line-h: rgba(255,255,255,0.12);
+    --t1: #F2F1ED;
+    --t2: #A8A59D;
+    --t3: #70706A;
+    --t4: #4D4C48;
+    --blue: #0A84FF; --blue-soft: rgba(10,132,255,0.16); --blue-mid: rgba(10,132,255,0.28);
+    --green: #30D158; --green-bg: rgba(48,209,88,0.16); --green-line: rgba(48,209,88,0.30);
+    --yellow: #FFD60A; --yellow-bg: rgba(255,214,10,0.14); --yellow-line: rgba(255,214,10,0.28);
+    --red: #FF453A; --red-bg: rgba(255,69,58,0.14); --red-line: rgba(255,69,58,0.28);
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.40), 0 1px 1px rgba(0,0,0,0.20);
+    --shadow-md: 0 2px 8px rgba(0,0,0,0.50), 0 1px 2px rgba(0,0,0,0.30);
+  }
+  body {
+    background:
+      radial-gradient(circle at 16% 0%, rgba(10,132,255,0.10), transparent 34%),
+      radial-gradient(circle at 88% 12%, rgba(48,209,88,0.06), transparent 28%),
+      var(--bg) !important;
+  }
+  .header { background: rgba(15,14,12,0.75); }
+  .period-tabs, .month-nav, .today-context, .summary-mini-card, .hybrid-section, .history-totals {
+    background: rgba(36,34,32,0.70);
+    border-color: rgba(255,255,255,0.08);
+  }
+  .summary-hero-hybrid {
+    background: linear-gradient(145deg, rgba(36,34,32,0.92) 0%, rgba(28,27,25,0.88) 100%);
+    border-color: rgba(255,255,255,0.08);
+  }
+  .period-slider { background: rgba(70,68,64,0.92); }
+  .header-month-badge, .header-balance, .header-privacy-btn {
+    background: rgba(36,34,32,0.70);
+    border-color: rgba(255,255,255,0.08);
+  }
+  body.privacy .hide-private,
+  body.privacy .summary-hero-amount,
+  body.privacy .summary-hero-amount-limit,
+  body.privacy .summary-mini-value,
+  body.privacy .summary-hero-foot-item strong,
+  body.privacy .rank-amount-hybrid,
+  body.privacy .rank-amount-hybrid .limit,
+  body.privacy .header-balance,
+  body.privacy .entry-amount,
+  body.privacy .daily-legend strong,
+  body.privacy .daily-today-amount,
+  body.privacy .daily-avg-label,
+  body.privacy .today-context-main,
+  body.privacy .today-context-sub,
+  body.privacy .breakdown-amount,
+  body.privacy .history-totals strong,
+  body.privacy .budget-editor-total,
+  body.privacy .budget-editor-input,
+  body.privacy .quick-stat-val,
+  body.privacy .confirm-amount-display {
+    text-shadow: 0 0 12px rgba(242,241,237,0.55);
+  }
+  /* Dailyavg label background fix para dark mode */
+  .daily-avg-label { background: rgba(15,14,12,0.9) !important; }
+  .daily-today-amount { background: rgba(15,14,12,0.9) !important; }
+  @media print { body { background: white !important; color: black !important; } }
 }
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 body {
@@ -382,10 +455,12 @@ z-index: 100;
 .empty-state-text { font-size: 15px; font-weight: 400; color: var(--t2); }
 
 /* Toast */
-.toast { position: fixed; bottom: calc(var(--sab) + 92px); left: 50%; transform: translateX(-50%) translateY(8px); background: rgba(28,27,25,0.92); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); color: #fff; padding: 11px 20px; border-radius: var(--r-pill); font-size: 13px; font-weight: 500; letter-spacing: -0.01em; opacity: 0; transition: opacity var(--t-mid) var(--ease), transform var(--t-mid) var(--ease); pointer-events: none; white-space: nowrap; z-index: 200; box-shadow: 0 8px 28px rgba(0,0,0,0.18); }
-.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast { position: fixed; bottom: calc(var(--sab) + 92px); left: 50%; transform: translateX(-50%) translateY(8px); background: rgba(28,27,25,0.92); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); color: #fff; padding: 11px 20px; border-radius: var(--r-pill); font-size: 13px; font-weight: 500; letter-spacing: -0.01em; opacity: 0; transition: opacity var(--t-mid) var(--ease), transform var(--t-mid) var(--ease); pointer-events: none; white-space: nowrap; z-index: 200; box-shadow: 0 8px 28px rgba(0,0,0,0.18); display: flex; align-items: center; gap: 12px; }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
 .toast.warning { background: rgba(232,163,61,0.95); }
 .toast.danger  { background: rgba(255,59,48,0.95); }
+.toast-action { background: rgba(255,255,255,0.18); border: none; color: #fff; font: inherit; font-size: 13px; font-weight: 700; padding: 4px 12px; border-radius: 999px; cursor: pointer; letter-spacing: -0.01em; }
+.toast-action:active { background: rgba(255,255,255,0.28); }
 
 /* Settings */
 .settings-section { background: var(--surface); border: 0.5px solid var(--line); border-radius: var(--r-md); overflow: hidden; box-shadow: var(--shadow-sm); margin-top: 10px; }
@@ -400,6 +475,75 @@ z-index: 100;
 .btn-export:active { opacity: 0.7; }
 .btn-primary { width: 100%; padding: 14px; background: var(--blue); border: none; border-radius: var(--r-sm); color: #fff; font-family: inherit; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; cursor: pointer; margin-top: 10px; transition: all var(--t-fast) var(--ease); box-shadow: 0 2px 6px rgba(0,122,255,0.20); }
 .btn-primary:active { transform: scale(0.98); background: #0062CC; }
+
+/* Privacy mode: oculta todos los montos visualmente sin cambiar el DOM */
+body.privacy .hide-private,
+body.privacy .summary-hero-amount,
+body.privacy .summary-hero-amount-limit,
+body.privacy .summary-mini-value,
+body.privacy .summary-hero-foot-item strong,
+body.privacy .rank-amount-hybrid,
+body.privacy .rank-amount-hybrid .limit,
+body.privacy .header-balance,
+body.privacy .entry-amount,
+body.privacy .daily-legend strong,
+body.privacy .daily-today-amount,
+body.privacy .daily-avg-label,
+body.privacy .today-context-main,
+body.privacy .today-context-sub,
+body.privacy .breakdown-amount,
+body.privacy .history-totals strong,
+body.privacy .budget-editor-total,
+body.privacy .budget-editor-input,
+body.privacy .quick-stat-val,
+body.privacy .confirm-amount-display {
+  color: transparent !important;
+  text-shadow: 0 0 12px rgba(28,27,25,0.55);
+  -webkit-text-stroke: 0;
+}
+body.privacy .budget-editor-input { background: var(--surface-3) !important; }
+
+/* Header privacy toggle button */
+.header-privacy-btn {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  border: 0.5px solid rgba(255,255,255,0.8);
+  background: rgba(255,255,255,0.68);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: all var(--t-fast) var(--ease);
+}
+.header-privacy-btn:active { transform: scale(0.92); }
+.header-privacy-btn svg { width: 14px; height: 14px; stroke: var(--t2); stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+body.privacy .header-privacy-btn svg { stroke: var(--blue); }
+
+/* Config manager */
+.config-manager { margin-top: 10px; }
+.config-group { padding: 12px 0; border-bottom: 0.5px solid var(--line); }
+.config-group:last-child { border-bottom: none; }
+.config-group-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 16px 8px; }
+.config-group-title { font-size: 15px; font-weight: 700; color: var(--t1); letter-spacing: -0.02em; }
+.config-group-sub { font-size: 11px; color: var(--t3); margin-top: 2px; }
+.config-add-btn { border: none; background: var(--blue-soft); color: var(--blue); font: inherit; font-size: 12px; font-weight: 700; padding: 7px 11px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
+.config-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; }
+.config-row-main { min-width: 0; flex: 1; }
+.config-row-name { font-size: 14px; font-weight: 650; color: var(--t1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.config-row-name.archived { color: var(--t3); text-decoration: line-through; text-decoration-thickness: 1px; }
+.config-row-meta { font-size: 11px; color: var(--t3); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.config-row-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.config-mini-btn { border: 0.5px solid var(--line); background: var(--surface); color: var(--t2); font: inherit; font-size: 11px; font-weight: 700; padding: 6px 9px; border-radius: 999px; cursor: pointer; }
+.config-mini-btn.primary { border-color: transparent; background: var(--blue-soft); color: var(--blue); }
+.config-mini-btn.warning { border-color: var(--yellow-line); background: var(--yellow-bg); color: var(--yellow); }
+.config-mini-btn.good { border-color: var(--green-line); background: var(--green-bg); color: var(--green); }
+.config-textarea { width: 100%; min-height: 92px; resize: vertical; background: var(--surface-2); border: 0.5px solid var(--line); border-radius: 10px; padding: 11px 13px; color: var(--t1); font-family: inherit; font-size: 14px; line-height: 1.35; outline: none; transition: all var(--t-mid) var(--ease); -webkit-appearance: none; letter-spacing: -0.01em; }
+.config-textarea:focus { border-color: var(--blue); background: var(--surface); box-shadow: 0 0 0 3px var(--blue-soft); }
+.config-select { width: 100%; background: var(--surface-2); border: 0.5px solid var(--line); border-radius: 10px; padding: 11px 13px; color: var(--t1); font-family: inherit; font-size: 15px; outline: none; }
+.config-warning { display: none; margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: var(--yellow-bg); color: var(--yellow); border: 0.5px solid var(--yellow-line); font-size: 12px; font-weight: 600; line-height: 1.35; }
+.config-warning.visible { display: block; }
 
 /* Budget editor */
 .budget-editor-list { background: var(--surface); border: 0.5px solid var(--line); border-radius: var(--r-md); overflow: hidden; box-shadow: var(--shadow-sm); margin-top: 10px; }
@@ -529,6 +673,9 @@ body { max-width: 480px; margin: 0 auto; border-left: 0.5px solid var(--line); b
 <div class="header">
   <div class="header-brand"><div class="header-logo">RL</div><span class="header-title">Gastos</span></div>
   <div class="header-right">
+    <button class="header-privacy-btn" id="privacyToggle" onclick="togglePrivacy()" aria-label="Modo privacidad">
+      <svg viewBox="0 0 24 24" id="privacyIcon"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+    </button>
     <span class="header-month-badge" id="headerMonthBadge"></span>
     <span class="header-balance" id="headerBalance">₲ 0</span>
   </div>
@@ -593,7 +740,11 @@ body { max-width: 480px; margin: 0 auto; border-left: 0.5px solid var(--line); b
 </div>
 
 <div class="screen" id="screen-ajustes">
-  <div class="section-label" style="margin-top:20px">Presupuesto mensual</div>
+  <div class="section-label" style="margin-top:20px">Categorías y medios</div>
+  <p style="font-size:13px; color:var(--t2); margin:0 4px 0;">Editá nombres, palabras clave y estado. Archivar conserva el historial.</p>
+  <div class="settings-section config-manager" id="configManager"></div>
+
+  <div class="section-label" style="margin-top:28px">Presupuesto mensual</div>
   <p style="font-size:13px; color:var(--t2); margin:0 4px 0;">Editá los límites por categoría. Se usan en el resumen del mes.</p>
   <div class="budget-editor-list" id="budgetEditor"></div>
   <div class="budget-editor-total"><span>Total presupuesto</span><span id="budgetEditorTotal">₲ 0</span></div>
@@ -605,8 +756,42 @@ body { max-width: 480px; margin: 0 auto; border-left: 0.5px solid var(--line); b
     <div class="settings-item"><div><div class="settings-item-label">Racha actual</div><div class="settings-item-desc">Días consecutivos registrando</div></div><span class="settings-item-action" id="settingsStreak">0 días</span></div>
   </div>
   <button class="btn-export" onclick="exportCSV()">Exportar CSV</button>
+  <button class="btn-export" onclick="exportBackupJSON()">Exportar backup JSON</button>
+  <input type="file" id="jsonImportInput" accept="application/json,.json" style="display:none" onchange="importBackupJSON(this)">
+  <button class="btn-export" onclick="document.getElementById('jsonImportInput').click()">Importar backup JSON</button>
   <button class="btn-export" onclick="printExtracto()">Exportar extracto mensual (PDF)</button>
   <button class="btn-danger" onclick="clearAll()">Borrar todos los datos</button>
+</div>
+
+<!-- Config modal -->
+<div class="modal-overlay" id="configOverlay" onclick="closeConfigModal()"></div>
+<div class="modal-panel" id="configPanel">
+  <div class="confirm-header">
+    <span class="confirm-label" id="configModalTitle">Editar</span>
+    <span class="confirm-amount-display" id="configModalBadge" style="font-size:15px">Config</span>
+  </div>
+  <div class="confirm-body">
+    <div class="confirm-section" id="configTypeSection">
+      <div class="confirm-section-label">Tipo</div>
+      <select class="config-select" id="configTypeInput">
+        <option value="expense">Gasto</option>
+        <option value="income">Ingreso</option>
+      </select>
+    </div>
+    <div class="confirm-section">
+      <div class="confirm-section-label">Nombre visible</div>
+      <input type="text" class="note-input" id="configNameInput" placeholder="Ej: TC Itaú Black">
+    </div>
+    <div class="confirm-section">
+      <div class="confirm-section-label">Palabras clave</div>
+      <textarea class="config-textarea" id="configKeywordsInput" placeholder="Una por línea o separadas por coma&#10;Ej: black, itaú black, 5881"></textarea>
+      <div class="config-warning" id="configWarnings"></div>
+    </div>
+  </div>
+  <div class="confirm-actions">
+    <button class="btn-cancel" onclick="closeConfigModal()">Cancelar</button>
+    <button class="btn-save" onclick="saveConfigItem()">Guardar</button>
+  </div>
 </div>
 
 <div class="bottom-nav">
@@ -1061,6 +1246,66 @@ function getActivePaymentMethods() {
 function activeCategoryIdsByType(type) { return getActiveCategoriesByType(type).map(c => c.id); }
 function activePaymentMethodIds() { return getActivePaymentMethods().map(p => p.id); }
 
+/* ─── Sanitización de HTML ───────────────────────────────────────
+ * Todo texto que venga del usuario o de config debe pasar por acá
+ * antes de inyectarse en innerHTML. Protege contra HTML/JS injection
+ * si un backup importado o un nombre custom contiene caracteres raros. */
+function escapeHTML(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+function escapeAttr(value) { return escapeHTML(value); }
+/* Escapa un string para usarlo dentro de un onclick="...'STRING'..." */
+function jsString(value) {
+  return String(value == null ? '' : value)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '');
+}
+
+/* ─── Helpers para el editor de config (Fase 2) ──────────────── */
+function makeStableCustomId(prefix, name, existingIds) {
+  const base = slug(name) || 'custom';
+  let id = prefix + '_custom_' + base;
+  if (!existingIds.has(id)) return id;
+  let i = 2;
+  while (existingIds.has(id + '_' + i)) i++;
+  return id + '_' + i;
+}
+function normalizeKeywordsFromInput(input) {
+  const raw = String(input || '')
+    .split(/[\n,;]+/)
+    .map(k => k.trim().toLowerCase())
+    .filter(Boolean);
+  return [...new Set(raw)];
+}
+function getCategoryUsage(categoryId) {
+  return entries.filter(e => e.categoryId === categoryId).length;
+}
+function getPaymentMethodUsage(paymentMethodId) {
+  return entries.filter(e => e.paymentMethodId === paymentMethodId).length;
+}
+function saveConfig() {
+  safeSet('rl_categories', categoriesConfig);
+  safeSet('rl_payment_methods', paymentMethodsConfig);
+}
+function getKeywordConflicts(kind, id, keywords, type) {
+  const conflicts = [];
+  const source = kind === 'category'
+    ? categoriesConfig.filter(x => x.type === type)
+    : paymentMethodsConfig;
+  for (const kw of keywords) {
+    const owner = source.find(item => item.id !== id && item.active && (item.keywords || []).map(k => k.toLowerCase()).includes(kw));
+    if (owner) conflicts.push('"' + kw + '" ya está en ' + owner.name);
+  }
+  return conflicts;
+}
+
 /* ─── Validación de entry (usa config) ───────────────────────────── */
 function validateEntry(entry) {
   if (!entry || typeof entry !== 'object') return 'Entrada inválida';
@@ -1120,6 +1365,7 @@ let showSummaryMedios = false;
 let editingId = null;
 let editingSelectedCat = null;
 let editingSelectedMedio = null;
+let configEditing = { kind: null, id: null, type: null };
 
 /* Tanda 3: mes seleccionado en la vista "Mes". Default = mes actual.
  * Sólo afecta renderResumen cuando currentPeriod === 'mes'. Header,
@@ -1165,10 +1411,17 @@ function renderMonthNav() {
 }
 
 function save() {
-  safeSet('rl_entries', entries);
+  // FIX: verificar que safeSet haya persistido. Si localStorage está lleno
+  // o Safari bloqueó almacenamiento, hay que avisar al usuario con un toast
+  // visible de error, no dejar que crea que se guardó cuando no es así.
+  const ok = safeSet('rl_entries', entries);
+  if (!ok) {
+    showToast('⚠ No se pudo guardar en localStorage. Exportá backup JSON ya.', 'danger');
+  }
   updateHeader();
   renderQuickStats();
   renderStreak();
+  return ok;
 }
 function saveAlerted() { safeSet('rl_alerted', alertedCats); }
 
@@ -1414,14 +1667,14 @@ function parseInput() {
   document.getElementById('noteInput').value = '';
   const activeCats = getActiveCategoriesByType(currentType);
   document.getElementById('catSelector').innerHTML = activeCats.map(c =>
-    '<button class="selector-chip' + (c.id === categoryId ? ' selected' : '') + '" onclick="selectCat(this,\'' + c.id + '\')">' + c.name + '</button>'
+    '<button class="selector-chip' + (c.id === categoryId ? ' selected' : '') + '" onclick="selectCat(this,\'' + c.id + '\')">' + escapeHTML(c.name) + '</button>'
   ).join('');
   const medioSection = document.getElementById('medioSection');
   if (currentType === 'expense') {
     medioSection.style.display = '';
     const activePays = getActivePaymentMethods();
     document.getElementById('medioSelector').innerHTML = activePays.map(p =>
-      '<button class="selector-chip' + (p.id === paymentMethodId ? ' selected' : '') + '" onclick="selectMedio(this,\'' + p.id + '\')">' + p.name + '</button>'
+      '<button class="selector-chip' + (p.id === paymentMethodId ? ' selected' : '') + '" onclick="selectMedio(this,\'' + p.id + '\')">' + escapeHTML(p.name) + '</button>'
     ).join('');
   } else {
     medioSection.style.display = 'none';
@@ -1459,7 +1712,30 @@ function saveEntry() {
 }
 
 function cancelConfirm() { document.getElementById('confirmCard').className = 'confirm-card'; pendingEntry = null; }
-function deleteEntry(id) { entries = entries.filter(e => e.id !== id); save(); renderHistorial(); renderResumen(); }
+function deleteEntry(id) {
+  const idx = entries.findIndex(e => e.id === id);
+  if (idx === -1) return;
+  // Guardar copia para deshacer
+  const removed = entries[idx];
+  const removedIdx = idx;
+  entries.splice(idx, 1);
+  save();
+  renderHistorial();
+  renderResumen();
+  // Toast con Deshacer de 5s
+  showToast('Registro eliminado', null, {
+    label: 'Deshacer',
+    onClick: () => {
+      // Reinsertar en la misma posición (o al inicio si el array se encogió)
+      const insertAt = Math.min(removedIdx, entries.length);
+      entries.splice(insertAt, 0, removed);
+      save();
+      renderHistorial();
+      renderResumen();
+      showToast('Restaurado ✓');
+    }
+  });
+}
 
 /* ─── EDIT MODAL ─────────────────────────────────────────────────── */
 function openEditModal(id) {
@@ -1479,7 +1755,7 @@ function openEditModal(id) {
   const catsToShow = currentCat && !activeOfType.some(c => c.id === currentCat.id)
     ? [...activeOfType, currentCat] : activeOfType;
   document.getElementById('editCatSelector').innerHTML = catsToShow.map(c =>
-    '<button class="selector-chip' + (c.id === entry.categoryId ? ' selected' : '') + '" onclick="selectEditCat(this,\'' + c.id + '\')">' + c.name + (c.active ? '' : ' (archivada)') + '</button>'
+    '<button class="selector-chip' + (c.id === entry.categoryId ? ' selected' : '') + '" onclick="selectEditCat(this,\'' + c.id + '\')">' + escapeHTML(c.name) + (c.active ? '' : ' (archivada)') + '</button>'
   ).join('');
   const editMedioSection = document.getElementById('editMedioSection');
   if (entry.type === 'expense') {
@@ -1489,7 +1765,7 @@ function openEditModal(id) {
     const paysToShow = currentPm && !activePays.some(p => p.id === currentPm.id)
       ? [...activePays, currentPm] : activePays;
     document.getElementById('editMedioSelector').innerHTML = paysToShow.map(p =>
-      '<button class="selector-chip' + (p.id === entry.paymentMethodId ? ' selected' : '') + '" onclick="selectEditMedio(this,\'' + p.id + '\')">' + p.name + (p.active ? '' : ' (archivado)') + '</button>'
+      '<button class="selector-chip' + (p.id === entry.paymentMethodId ? ' selected' : '') + '" onclick="selectEditMedio(this,\'' + p.id + '\')">' + escapeHTML(p.name) + (p.active ? '' : ' (archivado)') + '</button>'
     ).join('');
   } else {
     editMedioSection.style.display = 'none';
@@ -1541,12 +1817,27 @@ function saveEditEntry() {
   showToast('Registro actualizado ✓');
 }
 
-function showToast(msg, variant) {
+function showToast(msg, variant, action) {
   const t = document.getElementById('toast');
-  t.textContent = msg;
+  // Cleanup previous action if any
+  t.innerHTML = '';
+  const label = document.createElement('span');
+  label.textContent = msg;
+  t.appendChild(label);
+  if (action && typeof action.onClick === 'function') {
+    const btn = document.createElement('button');
+    btn.className = 'toast-action';
+    btn.textContent = action.label || 'Deshacer';
+    btn.onclick = () => {
+      clearTimeout(t._timer);
+      t.className = 'toast' + (variant ? ' ' + variant : '');
+      action.onClick();
+    };
+    t.appendChild(btn);
+  }
   t.className = 'toast show' + (variant ? ' ' + variant : '');
   clearTimeout(t._timer);
-  const duration = variant === 'danger' ? 3500 : variant === 'warning' ? 3000 : 2000;
+  const duration = action ? 5000 : (variant === 'danger' ? 3500 : variant === 'warning' ? 3000 : 2000);
   t._timer = setTimeout(() => t.className = 'toast' + (variant ? ' ' + variant : ''), duration);
 }
 
@@ -1559,6 +1850,24 @@ function showScreen(name) {
   if (name === 'historial') renderHistorial();
   if (name === 'ajustes') renderSettings();
   window.scrollTo({ top: 0 });
+}
+
+/* Modo privacidad: oculta todos los montos visualmente (vía CSS en body).
+ * Se persiste en localStorage para que se mantenga entre sesiones.
+ * Ícono: ojo normal = visible, ojo tachado = privacidad on. */
+function togglePrivacy() {
+  const on = !document.body.classList.contains('privacy');
+  setPrivacy(on);
+  safeSet('rl_privacy', on);
+}
+function setPrivacy(on) {
+  document.body.classList.toggle('privacy', on);
+  const icon = document.getElementById('privacyIcon');
+  if (icon) {
+    icon.innerHTML = on
+      ? '<path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-10-7-10-7a16.26 16.26 0 014.22-5.12"/><path d="M22 12s-1.5-3-4-5"/><line x1="1" y1="1" x2="23" y2="23"/>'
+      : '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>';
+  }
 }
 
 function setPeriod(period, btn) {
@@ -1862,7 +2171,7 @@ function renderResumen() {
               '<div class="rank-badge-hybrid ' + status + '">' + (idx + 1) + '</div>' +
               '<div class="rank-main-hybrid">' +
                 '<div class="rank-name-row-hybrid">' +
-                  '<span class="rank-name-hybrid">' + (CAT_ICONS[item.catName] || '○') + ' ' + item.catName + '</span>' +
+                  '<span class="rank-name-hybrid">' + (CAT_ICONS[item.catName] || '○') + ' ' + escapeHTML(item.catName) + '</span>' +
                   '<span>' +
                     '<span class="rank-amount-hybrid">' + formatGs(item.amt) + (monthMode && item.limit > 0 ? ' <span class="limit">/ ' + formatGs(item.limit) + '</span>' : '') + '</span>' +
                     '<span class="rank-pct-hybrid ' + (monthMode && item.limit > 0 ? status : 'safe') + '">' + (monthMode && item.limit > 0 ? item.pctOfBudget + '%' : item.sharePct + '%') + '</span>' +
@@ -1887,7 +2196,7 @@ function renderResumen() {
           '<div class="summary-collapse ' + (showSummaryMedios ? 'open' : '') + '">' +
             medioEntries.map(([medio, amt]) =>
               '<div class="summary-medium-row">' +
-                '<span class="summary-medium-name">' + medio + '</span>' +
+                '<span class="summary-medium-name">' + escapeHTML(medio) + '</span>' +
                 '<div class="summary-medium-values">' +
                   '<span class="breakdown-amount">' + formatGs(amt) + '</span>' +
                   '<span class="breakdown-pct">' + Math.round((amt / totalExp) * 100) + '%</span>' +
@@ -1922,7 +2231,7 @@ function buildFilterChips() {
   const shortLabels = {'Gastos varios':'Varios','Cuidado personal':'Personal','Salida Mica':'Mica','Salida amigos':'Amigos','Otro ingreso':'Otro'};
   document.getElementById('filterRow').innerHTML = allFilters.map(f => {
     const label = f === 'todo' ? 'Todo' : (shortLabels[getCategoryName(f)] || getCategoryName(f));
-    return '<button class="filter-chip' + (f === currentFilter ? ' active' : '') + '" onclick="setFilter(\'' + f + '\', this)">' + label + '</button>';
+    return '<button class="filter-chip' + (f === currentFilter ? ' active' : '') + '" onclick="setFilter(\'' + f + '\', this)">' + escapeHTML(label) + '</button>';
   }).join('');
 }
 
@@ -1995,9 +2304,9 @@ function renderHistorial() {
           '<div class="entry-content">' +
             '<div class="entry-icon ' + (e.type === 'income' ? 'income-icon' : 'expense-icon') + '">' + icon + '</div>' +
             '<div class="entry-left">' +
-              '<div class="entry-cat">' + catName + '</div>' +
-              (e.note ? '<div class="entry-note">' + e.note + '</div>' : '') +
-              '<div class="entry-meta">' + (pmName || (e.type === 'income' ? 'Ingreso' : '')) + '</div>' +
+              '<div class="entry-cat">' + escapeHTML(catName) + '</div>' +
+              (e.note ? '<div class="entry-note">' + escapeHTML(e.note) + '</div>' : '') +
+              '<div class="entry-meta">' + escapeHTML(pmName || (e.type === 'income' ? 'Ingreso' : '')) + '</div>' +
             '</div>' +
             '<div class="entry-right">' +
               '<div class="entry-amount ' + e.type + '">' + (e.type === 'income' ? '+' : '') + formatGs(e.amount) + '</div>' +
@@ -2105,13 +2414,257 @@ function updateHeader() {
   el.style.background = net >= 0 ? 'var(--green-bg)' : 'var(--red-bg)';
 }
 
+/* ─── Fase 2: Config manager (categorías, medios, keywords) ──────
+ * Editor unificado en Ajustes. Permite agregar / renombrar / archivar
+ * categorías y medios, y editar sus keywords. NUNCA borra físicamente:
+ * archivar preserva el historial. Cuando renombrás, el nombre viejo
+ * pasa a legacyNames para que backups antiguos sigan mapeando bien. */
+
+function renderConfigManager() {
+  const el = document.getElementById('configManager');
+  if (!el) return;
+
+  const renderCategoryGroup = (type, title) => {
+    const items = categoriesConfig
+      .filter(c => c.type === type)
+      .sort((a,b) => (a.active === b.active ? a.name.localeCompare(b.name, 'es') : (a.active ? -1 : 1)));
+    const activeCount = items.filter(x => x.active).length;
+    return '<div class="config-group">' +
+      '<div class="config-group-head">' +
+        '<div><div class="config-group-title">' + escapeHTML(title) + '</div><div class="config-group-sub">' + activeCount + ' activas · ' + items.length + ' total</div></div>' +
+        "<button class=\"config-add-btn\" onclick=\"openConfigModal('category', null, '" + jsString(type) + "')\">+ Agregar</button>" +
+      '</div>' +
+      items.map(item => renderConfigRow('category', item)).join('') +
+    '</div>';
+  };
+
+  const pays = [...paymentMethodsConfig].sort((a,b) => (a.active === b.active ? a.name.localeCompare(b.name, 'es') : (a.active ? -1 : 1)));
+  const activePays = pays.filter(x => x.active).length;
+  const paymentsGroup = '<div class="config-group">' +
+    '<div class="config-group-head">' +
+      '<div><div class="config-group-title">Medios de pago</div><div class="config-group-sub">' + activePays + ' activos · ' + pays.length + ' total</div></div>' +
+      "<button class=\"config-add-btn\" onclick=\"openConfigModal('payment', null, null)\">+ Agregar</button>" +
+    '</div>' +
+    pays.map(item => renderConfigRow('payment', item)).join('') +
+  '</div>';
+
+  el.innerHTML = renderCategoryGroup('expense', 'Categorías de gasto') +
+                 renderCategoryGroup('income', 'Categorías de ingreso') +
+                 paymentsGroup;
+}
+
+function renderConfigRow(kind, item) {
+  const usage = kind === 'category' ? getCategoryUsage(item.id) : getPaymentMethodUsage(item.id);
+  const kwCount = (item.keywords || []).length;
+  const statusText = item.active ? 'activa' : 'archivada';
+  const itemId = jsString(item.id);
+  const action = item.active
+    ? '<button class="config-mini-btn warning" onclick="archiveConfigItem(\'' + kind + '\',\'' + itemId + '\')">Archivar</button>'
+    : '<button class="config-mini-btn good" onclick="reactivateConfigItem(\'' + kind + '\',\'' + itemId + '\')">Reactivar</button>';
+  return '<div class="config-row">' +
+    '<div class="config-row-main">' +
+      '<div class="config-row-name ' + (item.active ? '' : 'archived') + '">' + escapeHTML(item.name) + '</div>' +
+      '<div class="config-row-meta">' + statusText + ' · ' + usage + ' usos · ' + kwCount + ' keywords</div>' +
+    '</div>' +
+    '<div class="config-row-actions">' +
+      '<button class="config-mini-btn primary" onclick="openConfigModal(\'' + kind + '\',\'' + itemId + '\', null)">Editar</button>' +
+      action +
+    '</div>' +
+  '</div>';
+}
+
+function openConfigModal(kind, id, type) {
+  configEditing = { kind, id, type };
+  const isCategory = kind === 'category';
+  const source = isCategory ? categoriesConfig : paymentMethodsConfig;
+  const item = id ? source.find(x => x.id === id) : null;
+
+  document.getElementById('configModalTitle').textContent = item ? 'Editar ' + (isCategory ? 'categoría' : 'medio') : 'Agregar ' + (isCategory ? 'categoría' : 'medio');
+  document.getElementById('configModalBadge').textContent = isCategory ? 'Categoría' : 'Medio';
+  document.getElementById('configTypeSection').style.display = isCategory ? '' : 'none';
+
+  const typeInput = document.getElementById('configTypeInput');
+  if (isCategory) {
+    typeInput.value = item ? item.type : (type || 'expense');
+    // Nunca se puede cambiar el tipo de una categoría ya creada (rompería entries)
+    typeInput.disabled = !!item;
+  }
+
+  document.getElementById('configNameInput').value = item ? item.name : '';
+  document.getElementById('configKeywordsInput').value = item ? (item.keywords || []).join('\n') : '';
+  document.getElementById('configWarnings').className = 'config-warning';
+  document.getElementById('configWarnings').textContent = '';
+
+  document.getElementById('configOverlay').classList.add('visible');
+  document.getElementById('configPanel').classList.add('visible');
+  setTimeout(() => document.getElementById('configNameInput').focus(), 50);
+  refreshConfigWarnings();
+}
+
+function closeConfigModal() {
+  document.getElementById('configOverlay').classList.remove('visible');
+  document.getElementById('configPanel').classList.remove('visible');
+  configEditing = { kind: null, id: null, type: null };
+}
+
+function refreshConfigWarnings() {
+  const kind = configEditing.kind;
+  if (!kind) return [];
+  const name = document.getElementById('configNameInput').value.trim();
+  const keywords = normalizeKeywordsFromInput(document.getElementById('configKeywordsInput').value);
+  const type = kind === 'category'
+    ? (configEditing.id ? (getCategoryById(configEditing.id) || {}).type : document.getElementById('configTypeInput').value)
+    : null;
+
+  const warnings = [];
+  const source = kind === 'category' ? categoriesConfig.filter(x => x.type === type) : paymentMethodsConfig;
+  if (name) {
+    const dupName = source.find(x => x.id !== configEditing.id && x.name.trim().toLowerCase() === name.toLowerCase());
+    if (dupName) warnings.push('Ya existe otro item con ese nombre.');
+  }
+  warnings.push(...getKeywordConflicts(kind, configEditing.id, keywords, type));
+
+  const box = document.getElementById('configWarnings');
+  if (warnings.length) {
+    box.textContent = warnings.slice(0, 4).join(' · ');
+    box.className = 'config-warning visible';
+  } else {
+    box.textContent = '';
+    box.className = 'config-warning';
+  }
+  return warnings;
+}
+
+function saveConfigItem() {
+  const kind = configEditing.kind;
+  if (!kind) return;
+  const isCategory = kind === 'category';
+  const name = document.getElementById('configNameInput').value.trim();
+  if (name.length < 2) { showToast('Nombre demasiado corto', 'danger'); return; }
+  if (name.length > 40) { showToast('Nombre demasiado largo (máx 40)', 'danger'); return; }
+
+  const keywords = normalizeKeywordsFromInput(document.getElementById('configKeywordsInput').value);
+  const type = isCategory
+    ? (configEditing.id ? (getCategoryById(configEditing.id) || {}).type : document.getElementById('configTypeInput').value)
+    : null;
+
+  const source = isCategory ? categoriesConfig : paymentMethodsConfig;
+  const duplicateName = source.find(x => x.id !== configEditing.id && (!isCategory || x.type === type) && x.name.trim().toLowerCase() === name.toLowerCase());
+  if (duplicateName) { showToast('Ese nombre ya existe', 'danger'); return; }
+
+  const warnings = refreshConfigWarnings().filter(w => !w.startsWith('Ya existe otro item'));
+  if (warnings.length && !confirm('Hay keywords repetidas. El parser puede elegir mal.\n\n' + warnings.slice(0, 5).join('\n') + '\n\n¿Guardar igual?')) return;
+
+  const nowIso = new Date().toISOString();
+  if (configEditing.id) {
+    // Editar existente
+    const item = source.find(x => x.id === configEditing.id);
+    if (!item) { showToast('Item no encontrado', 'danger'); return; }
+    if (item.name !== name) {
+      // Guardar el nombre viejo como legacy
+      item.legacyNames = [...new Set([...(item.legacyNames || []), item.name])];
+    }
+    item.name = name;
+    item.keywords = keywords;
+    item.updatedAt = nowIso;
+  } else {
+    // Crear nuevo
+    const ids = new Set(source.map(x => x.id));
+    const id = makeStableCustomId(isCategory ? 'cat' : 'pay', name, ids);
+    const item = {
+      id, name, keywords,
+      active: true,
+      legacyNames: [],
+      createdAt: nowIso,
+      updatedAt: nowIso
+    };
+    if (isCategory) {
+      item.type = type;
+      categoriesConfig.push(item);
+      if (type === 'expense' && budgets[id] == null) budgets[id] = 0;
+    } else {
+      paymentMethodsConfig.push(item);
+    }
+  }
+
+  saveConfig();
+  safeSet('rl_budgets', budgets);
+  closeConfigModal();
+  renderConfigManager();
+  renderBudgetEditor();
+  renderHistorial();
+  renderResumen();
+  showToast('Configuración guardada ✓');
+}
+
+function archiveConfigItem(kind, id) {
+  const isCategory = kind === 'category';
+  const source = isCategory ? categoriesConfig : paymentMethodsConfig;
+  const item = source.find(x => x.id === id);
+  if (!item) return;
+
+  // Invariante: siempre debe quedar al menos una categoría activa por tipo
+  // y al menos un medio activo, sino el selector quedaría vacío.
+  if (isCategory) {
+    const activeSameType = categoriesConfig.filter(c => c.type === item.type && c.active);
+    if (activeSameType.length <= 1) { showToast('Debe quedar al menos una categoría activa de ese tipo', 'danger'); return; }
+  } else {
+    const activePays = paymentMethodsConfig.filter(p => p.active);
+    if (activePays.length <= 1) { showToast('Debe quedar al menos un medio activo', 'danger'); return; }
+  }
+
+  const usage = isCategory ? getCategoryUsage(id) : getPaymentMethodUsage(id);
+  const msg = usage > 0
+    ? 'Este item tiene ' + usage + ' registros históricos. Se va a archivar, no borrar. ¿Continuar?'
+    : '¿Archivar este item? No aparecerá al registrar nuevos movimientos.';
+  if (!confirm(msg)) return;
+
+  item.active = false;
+  item.archivedAt = new Date().toISOString();
+  item.updatedAt = item.archivedAt;
+  saveConfig();
+  renderConfigManager();
+  renderBudgetEditor();
+  showToast('Archivado');
+}
+
+function reactivateConfigItem(kind, id) {
+  const source = kind === 'category' ? categoriesConfig : paymentMethodsConfig;
+  const item = source.find(x => x.id === id);
+  if (!item) return;
+  item.active = true;
+  item.archivedAt = null;
+  item.updatedAt = new Date().toISOString();
+  saveConfig();
+  renderConfigManager();
+  renderBudgetEditor();
+  showToast('Reactivado ✓');
+}
+
+/* Listener global para refrescar warnings del modal en vivo mientras el
+ * usuario escribe nombre/keywords/tipo. Es pasivo: sólo lee, no bloquea. */
+document.addEventListener('input', function(e) {
+  if (e.target && (e.target.id === 'configKeywordsInput' || e.target.id === 'configNameInput' || e.target.id === 'configTypeInput')) {
+    refreshConfigWarnings();
+  }
+});
+
 /* ─── Settings ───────────────────────────────────────────────────── */
 function renderSettings() {
   document.getElementById('settingsCount').textContent = entries.length;
-  const bytes = new Blob([JSON.stringify(entries)]).size;
+  const payload = {
+    entries,
+    categories: categoriesConfig,
+    paymentMethods: paymentMethodsConfig,
+    budgets,
+    alerted: alertedCats,
+    manifest: getManifest()
+  };
+  const bytes = new Blob([JSON.stringify(payload)]).size;
   document.getElementById('settingsSize').textContent = (bytes / 1024).toFixed(1) + ' KB';
   const streak = calcStreak();
   document.getElementById('settingsStreak').textContent = streak + ' ' + (streak === 1 ? 'día' : 'días');
+  renderConfigManager();
   renderBudgetEditor();
 }
 
@@ -2120,8 +2673,8 @@ function renderBudgetEditor() {
   const expenseCats = getActiveCategoriesByType('expense');
   editor.innerHTML = expenseCats.map(cat =>
     '<div class="budget-editor-row">' +
-      '<span class="budget-editor-name">' + (CAT_ICONS[cat.name] || '○') + ' ' + cat.name + '</span>' +
-      '<input type="number" class="budget-editor-input" data-cat-id="' + cat.id + '" value="' + (budgets[cat.id] || 0) + '" min="0" step="10000" oninput="updateBudgetTotal()">' +
+      '<span class="budget-editor-name">' + (CAT_ICONS[cat.name] || '○') + ' ' + escapeHTML(cat.name) + '</span>' +
+      '<input type="number" class="budget-editor-input" data-cat-id="' + escapeAttr(cat.id) + '" value="' + (budgets[cat.id] || 0) + '" min="0" step="10000" oninput="updateBudgetTotal()">' +
     '</div>'
   ).join('');
   updateBudgetTotal();
@@ -2136,10 +2689,16 @@ function updateBudgetTotal() {
 
 function saveBudgets() {
   const inputs = document.querySelectorAll('.budget-editor-input');
-  const newBudgets = {};
+  // FIX: partir de los budgets existentes y sólo actualizar los visibles.
+  // Si una categoría está archivada, su budget no aparece en el editor pero
+  // debe preservarse por si se reactiva o por uso histórico en reportes.
+  const newBudgets = { ...budgets };
   inputs.forEach(i => { newBudgets[i.dataset.catId] = parseInt(i.value) || 0; });
   budgets = newBudgets;
-  safeSet('rl_budgets', budgets);
+  if (!safeSet('rl_budgets', budgets)) {
+    showToast('Error: no se pudo guardar (storage lleno)', 'danger');
+    return;
+  }
   alertedCats = {};
   saveAlerted();
   showToast('Presupuestos guardados ✓');
@@ -2192,7 +2751,7 @@ function renderPrintableExtracto() {
     const limit = budgets[catId] || 0;
     const sharePct = totalExp > 0 ? Math.round((amt/totalExp)*100) : 0;
     const limitPct = limit > 0 ? Math.round((amt/limit)*100) + '%' : '—';
-    return '<tr><td>' + getCategoryName(catId) + '</td><td class="right">' + formatGs(amt) + '</td><td class="right">' + sharePct + '%</td><td class="right">' + (limit > 0 ? formatGs(limit) : '—') + '</td><td class="right">' + limitPct + '</td></tr>';
+    return '<tr><td>' + escapeHTML(getCategoryName(catId)) + '</td><td class="right">' + formatGs(amt) + '</td><td class="right">' + sharePct + '%</td><td class="right">' + (limit > 0 ? formatGs(limit) : '—') + '</td><td class="right">' + limitPct + '</td></tr>';
   }).join('');
 
   // Por medio
@@ -2200,7 +2759,7 @@ function renderPrintableExtracto() {
   monthExpenses.forEach(e => { if (e.paymentMethodId) byMedio[e.paymentMethodId] = (byMedio[e.paymentMethodId] || 0) + e.amount; });
   const medioRows = Object.entries(byMedio).sort((a,b) => b[1] - a[1]).map(([pmId, amt]) => {
     const pct = totalExp > 0 ? Math.round((amt/totalExp)*100) : 0;
-    return '<tr><td>' + getPaymentMethodName(pmId) + '</td><td class="right">' + formatGs(amt) + '</td><td class="right">' + pct + '%</td></tr>';
+    return '<tr><td>' + escapeHTML(getPaymentMethodName(pmId)) + '</td><td class="right">' + formatGs(amt) + '</td><td class="right">' + pct + '%</td></tr>';
   }).join('');
 
   // Detalle por día (descendente)
@@ -2225,8 +2784,8 @@ function renderPrintableExtracto() {
       const pmName = e.paymentMethodId ? getPaymentMethodName(e.paymentMethodId) : '';
       detailHtml += '<tr>' +
         '<td style="width:42px">' + timeStr + '</td>' +
-        '<td>' + catName + (e.note ? ' — ' + e.note : '') + '</td>' +
-        '<td style="color:#555">' + (pmName || (e.type === 'income' ? 'Ingreso' : '')) + '</td>' +
+        '<td>' + escapeHTML(catName + (e.note ? ' — ' + e.note : '')) + '</td>' +
+        '<td style="color:#555">' + escapeHTML(pmName || (e.type === 'income' ? 'Ingreso' : '')) + '</td>' +
         '<td class="right">' + sign + formatGs(e.amount) + '</td>' +
       '</tr>';
     }
@@ -2279,6 +2838,191 @@ function printExtracto() {
   }, 60);
 }
 
+/* ─── Backup JSON real: export/import restaurable ───────────────
+ * CSV sirve para mirar datos. JSON sirve para RESTAURAR la app entera.
+ * El backup incluye manifest + entries + config completo + budgets + alerted.
+ * Al importar se valida el schema estrictamente y se crea un backup
+ * automático del estado actual antes de reemplazar. */
+
+function exportBackupJSON() {
+  const payload = {
+    app: 'RL Gastos',
+    exportVersion: 1,
+    schemaVersion: SCHEMA_VERSION,
+    exportedAt: new Date().toISOString(),
+    data: {
+      manifest: getManifest(),
+      entries,
+      categories: categoriesConfig,
+      paymentMethods: paymentMethodsConfig,
+      budgets,
+      alerted: alertedCats
+    }
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'rl_gastos_backup_' + new Date().toISOString().split('T')[0] + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Backup JSON exportado');
+}
+
+function validateImportedBackup(payload) {
+  const errors = [];
+  const data = payload && payload.data ? payload.data : payload;
+  if (!data || typeof data !== 'object') return { ok:false, errors:['JSON sin bloque data válido'] };
+
+  const cats = data.categories;
+  const pays = data.paymentMethods;
+  const importedEntries = data.entries;
+  const importedBudgets = data.budgets || {};
+  const importedAlerted = data.alerted || {};
+
+  if (!Array.isArray(cats)) errors.push('categories debe ser array');
+  if (!Array.isArray(pays)) errors.push('paymentMethods debe ser array');
+  if (!Array.isArray(importedEntries)) errors.push('entries debe ser array');
+  if (errors.length) return { ok:false, errors };
+
+  const idRe = /^(cat|pay)_[a-z0-9_]+$/;
+  const catIds = new Set();
+  for (const c of cats) {
+    if (!c || typeof c !== 'object') { errors.push('Categoría inválida'); break; }
+    if (!idRe.test(c.id || '') || !String(c.id).startsWith('cat_')) { errors.push('ID de categoría inválido: ' + c.id); break; }
+    if (catIds.has(c.id)) { errors.push('Categoría duplicada: ' + c.id); break; }
+    if (c.type !== 'expense' && c.type !== 'income') { errors.push('Tipo de categoría inválido: ' + c.name); break; }
+    if (!c.name || typeof c.name !== 'string') { errors.push('Categoría sin nombre'); break; }
+    catIds.add(c.id);
+  }
+
+  const payIds = new Set();
+  for (const p of pays) {
+    if (!p || typeof p !== 'object') { errors.push('Medio inválido'); break; }
+    if (!idRe.test(p.id || '') || !String(p.id).startsWith('pay_')) { errors.push('ID de medio inválido: ' + p.id); break; }
+    if (payIds.has(p.id)) { errors.push('Medio duplicado: ' + p.id); break; }
+    if (!p.name || typeof p.name !== 'string') { errors.push('Medio sin nombre'); break; }
+    payIds.add(p.id);
+  }
+
+  for (let i = 0; i < importedEntries.length; i++) {
+    const e = importedEntries[i];
+    if (!e || typeof e !== 'object') { errors.push('Entry inválido en posición ' + i); break; }
+    if (e.type !== 'expense' && e.type !== 'income') { errors.push('Tipo inválido en entry ' + i); break; }
+    if (!Number.isFinite(e.amount) || e.amount <= 0) { errors.push('Monto inválido en entry ' + i); break; }
+    if (!isValidDateISO(e.date)) { errors.push('Fecha inválida en entry ' + i); break; }
+    if (!catIds.has(e.categoryId)) { errors.push('Categoría inexistente en entry ' + i); break; }
+    const cat = cats.find(c => c.id === e.categoryId);
+    if (cat && cat.type !== e.type) { errors.push('Categoría no corresponde al tipo en entry ' + i); break; }
+    if (e.type === 'expense' && !payIds.has(e.paymentMethodId)) { errors.push('Medio inexistente en entry ' + i); break; }
+  }
+
+  for (const key of Object.keys(importedBudgets)) {
+    if (!catIds.has(key)) { errors.push('Budget con categoría inexistente: ' + key); break; }
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    data: {
+      categories: cats,
+      paymentMethods: pays,
+      entries: importedEntries,
+      budgets: importedBudgets,
+      alerted: importedAlerted && typeof importedAlerted === 'object' ? importedAlerted : {}
+    }
+  };
+}
+
+function importBackupJSON(input) {
+  const file = input && input.files && input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function() {
+    try {
+      const parsed = JSON.parse(reader.result);
+      const validation = validateImportedBackup(parsed);
+      if (!validation.ok) {
+        showToast('Importación inválida', 'danger');
+        alert('No se importó nada:\n\n' + validation.errors.join('\n'));
+        input.value = '';
+        return;
+      }
+
+      const d = validation.data;
+      const minDate = d.entries.length ? new Date(Math.min(...d.entries.map(e => new Date(e.date).getTime()))).toLocaleDateString('es-PY') : 'sin registros';
+      const maxDate = d.entries.length ? new Date(Math.max(...d.entries.map(e => new Date(e.date).getTime()))).toLocaleDateString('es-PY') : 'sin registros';
+      if (!confirm('¿Importar backup JSON?\n\nRegistros: ' + d.entries.length + '\nCategorías: ' + d.categories.length + '\nMedios: ' + d.paymentMethods.length + '\nRango: ' + minDate + ' - ' + maxDate + '\n\nSe hará backup automático de tu estado actual antes de reemplazar.')) {
+        input.value = '';
+        return;
+      }
+
+      // Backup del estado actual antes de reemplazar
+      const backupKey = 'rl_backup_before_import_' + new Date().toISOString().replace(/[:.]/g, '-');
+      safeSet(backupKey, {
+        at: new Date().toISOString(),
+        entries,
+        categories: categoriesConfig,
+        paymentMethods: paymentMethodsConfig,
+        budgets,
+        alerted: alertedCats,
+        manifest: getManifest()
+      });
+
+      entries = sortEntriesDesc(d.entries.map(normalizeEntry));
+      categoriesConfig = d.categories.map(c => ({
+        ...c,
+        keywords: Array.isArray(c.keywords) ? c.keywords : [],
+        legacyNames: Array.isArray(c.legacyNames) ? c.legacyNames : [],
+        active: c.active !== false,
+        createdAt: c.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }));
+      paymentMethodsConfig = d.paymentMethods.map(p => ({
+        ...p,
+        keywords: Array.isArray(p.keywords) ? p.keywords : [],
+        legacyNames: Array.isArray(p.legacyNames) ? p.legacyNames : [],
+        active: p.active !== false,
+        createdAt: p.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }));
+      budgets = d.budgets || {};
+      alertedCats = d.alerted || {};
+
+      saveConfig();
+      safeSet('rl_entries', entries);
+      safeSet('rl_budgets', budgets);
+      safeSet('rl_alerted', alertedCats);
+      const prevManifest = getManifest();
+      setManifest({
+        schemaVersion: SCHEMA_VERSION,
+        installedAt: (prevManifest && prevManifest.installedAt) || new Date().toISOString(),
+        lastImportAt: new Date().toISOString(),
+        lastBackupKey: backupKey,
+        dataKeys: {
+          entries: 'rl_entries', categories: 'rl_categories',
+          paymentMethods: 'rl_payment_methods', budgets: 'rl_budgets',
+          alerted: 'rl_alerted', settings: 'rl_settings'
+        }
+      });
+
+      updateHeader();
+      renderQuickStats();
+      renderStreak();
+      renderSettings();
+      renderHistorial();
+      renderResumen();
+      showToast('Backup importado ✓');
+    } catch (e) {
+      console.error(e);
+      showToast('JSON inválido', 'danger');
+    } finally {
+      input.value = '';
+    }
+  };
+  reader.readAsText(file);
+}
+
 /* ─── Clear All (FIX: limpia TODO el estado) ────────────────────── */
 function clearAll() {
   if (!confirm('¿Borrar TODOS los datos? Incluye registros, presupuestos, categorías personalizadas y alertas. No se puede deshacer.')) return;
@@ -2316,6 +3060,8 @@ function clearAll() {
 
 /* ─── Init ───────────────────────────────────────────────────────── */
 try {
+  // Cargar estado de privacidad ANTES de renderizar (evita flash de montos)
+  setPrivacy(!!safeGet('rl_privacy', false));
   updateMonthBadge();
   updateHeader();
   renderQuickStats();
@@ -2360,6 +3106,8 @@ document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
     const ov = document.getElementById('editOverlay');
     if (ov && ov.classList.contains('visible')) closeEditModal();
+    const cov = document.getElementById('configOverlay');
+    if (cov && cov.classList.contains('visible')) closeConfigModal();
   }
 });
 requestAnimationFrame(() => { try { updatePeriodSlider(); } catch(e) {} });
