@@ -426,6 +426,102 @@ z-index: 100;
 body { max-width: 480px; margin: 0 auto; border-left: 0.5px solid var(--line); border-right: 0.5px solid var(--line); position: relative; }
 .bottom-nav { max-width: 394px; }
 }
+
+/* ── Tanda 2: editable date input ───────────────────────────────── */
+.confirm-date-input {
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--t1);
+  font-weight: 500;
+  font-family: inherit;
+  background: var(--surface);
+  border: 0.5px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 10px;
+  outline: none;
+  transition: all var(--t-fast) var(--ease);
+  -webkit-appearance: none;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  min-width: 0;
+}
+.confirm-date-input::-webkit-date-and-time-value { text-align: right; }
+.confirm-date-input:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px var(--blue-soft);
+}
+
+/* ── Tanda 3: month navigator ───────────────────────────────────── */
+.month-nav {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 6px 8px;
+  margin: 0 0 14px;
+  background: rgba(255,255,255,0.64);
+  backdrop-filter: blur(18px) saturate(180%);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  border: 0.5px solid rgba(255,255,255,0.7);
+  border-radius: 999px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+}
+.month-nav-btn {
+  background: transparent; border: none;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: all var(--t-fast) var(--ease);
+  color: var(--t1);
+  padding: 0;
+  font-family: inherit;
+}
+.month-nav-btn:active:not([disabled]) { transform: scale(0.92); background: var(--surface-3); }
+.month-nav-btn[disabled] { opacity: 0.28; pointer-events: none; }
+.month-nav-btn svg {
+  width: 16px; height: 16px;
+  fill: none; stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.month-nav-label {
+  font-size: 14px; font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--t1);
+  flex: 1; text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Tanda 4: printable extract (@media print) ──────────────────── */
+.print-container { display: none; }
+
+@media print {
+  body { background: white !important; }
+  body * { visibility: hidden !important; }
+  .print-container, .print-container * { visibility: visible !important; }
+  .print-container {
+    display: block !important;
+    position: absolute !important;
+    left: 0; top: 0; width: 100%;
+    padding: 12px;
+    background: white;
+    color: black;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 10pt;
+    letter-spacing: 0;
+  }
+  .print-header { margin-bottom: 16px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+  .print-title { font-size: 16pt; font-weight: 700; margin-bottom: 3px; letter-spacing: -0.02em; }
+  .print-subtitle { font-size: 9pt; color: #555; }
+  .print-section { margin-bottom: 16px; page-break-inside: avoid; }
+  .print-section-title { font-size: 11pt; font-weight: 700; margin-bottom: 6px; border-bottom: 1px solid #ccc; padding-bottom: 3px; }
+  .print-kv { display: flex; justify-content: space-between; padding: 2px 0; font-size: 10pt; }
+  .print-kv strong { font-weight: 700; }
+  .print-table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+  .print-table th { text-align: left; padding: 4px 6px; border-bottom: 1px solid #000; font-weight: 700; }
+  .print-table td { padding: 2.5px 6px; border-bottom: 0.5px solid #ddd; vertical-align: top; }
+  .print-table td.right, .print-table th.right { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .print-day-header { font-size: 10pt; font-weight: 700; margin: 10px 0 4px; color: #333; border-top: 0.5px solid #000; padding-top: 6px; page-break-after: avoid; }
+  @page { margin: 14mm; size: A4; }
+}
 </style>
 
 </head>
@@ -465,7 +561,7 @@ body { max-width: 480px; margin: 0 auto; border-left: 0.5px solid var(--line); b
       <div class="confirm-section" id="medioSection"><div class="confirm-section-label">Medio de pago</div><div class="selector-row" id="medioSelector"></div></div>
       <div class="confirm-section"><div class="confirm-section-label">Nota (opcional)</div><input type="text" class="note-input" id="noteInput" placeholder="Descripción breve…"></div>
     </div>
-    <div class="confirm-date-row"><span class="confirm-date-label">Fecha</span><span class="confirm-date-val" id="confDate"></span></div>
+    <div class="confirm-date-row"><span class="confirm-date-label">Fecha</span><input type="datetime-local" class="confirm-date-input" id="confDate"></div>
     <div class="confirm-actions"><button class="btn-cancel" onclick="cancelConfirm()">Cancelar</button><button class="btn-save" onclick="saveEntry()">Guardar</button></div>
   </div>
 </div>
@@ -477,6 +573,11 @@ body { max-width: 480px; margin: 0 auto; border-left: 0.5px solid var(--line); b
     <button class="period-tab" data-period="semana" onclick="setPeriod('semana', this)">Semana</button>
     <button class="period-tab" data-period="mes" onclick="setPeriod('mes', this)">Mes</button>
     <button class="period-tab" data-period="todo" onclick="setPeriod('todo', this)">Todo</button>
+  </div>
+  <div class="month-nav" id="monthNav" style="display:none">
+    <button class="month-nav-btn" onclick="incSelectedMonth(-1)" aria-label="Mes anterior"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+    <span class="month-nav-label" id="monthNavLabel"></span>
+    <button class="month-nav-btn" id="monthNavNext" onclick="incSelectedMonth(1)" aria-label="Mes siguiente"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>
   </div>
   <div id="resumenContent"></div>
 </div>
@@ -504,6 +605,7 @@ body { max-width: 480px; margin: 0 auto; border-left: 0.5px solid var(--line); b
     <div class="settings-item"><div><div class="settings-item-label">Racha actual</div><div class="settings-item-desc">Días consecutivos registrando</div></div><span class="settings-item-action" id="settingsStreak">0 días</span></div>
   </div>
   <button class="btn-export" onclick="exportCSV()">Exportar CSV</button>
+  <button class="btn-export" onclick="printExtracto()">Exportar extracto mensual (PDF)</button>
   <button class="btn-danger" onclick="clearAll()">Borrar todos los datos</button>
 </div>
 
@@ -515,6 +617,9 @@ body { max-width: 480px; margin: 0 auto; border-left: 0.5px solid var(--line); b
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- Tanda 4: hidden print container -->
+<div class="print-container" id="printContainer"></div>
 
 <!-- Edit modal -->
 
@@ -542,7 +647,7 @@ body { max-width: 480px; margin: 0 auto; border-left: 0.5px solid var(--line); b
       <input type="text" class="note-input" id="editNoteInput" placeholder="Descripción breve…">
     </div>
   </div>
-  <div class="confirm-date-row"><span class="confirm-date-label">Fecha</span><span class="confirm-date-val" id="editDateDisplay"></span></div>
+  <div class="confirm-date-row"><span class="confirm-date-label">Fecha</span><input type="datetime-local" class="confirm-date-input" id="editDateDisplay"></div>
   <div class="confirm-actions">
     <button class="btn-cancel" onclick="closeEditModal()">Cancelar</button>
     <button class="btn-save" onclick="saveEditEntry()">Guardar cambios</button>
@@ -554,6 +659,7 @@ body { max-width: 480px; margin: 0 auto; border-left: 0.5px solid var(--line); b
    RL GASTOS — Final version
    - Bug fixes: clearAll, budgetStatus, CSV escape, safe storage
    - Nuevas features: streak, edit entry, search, context Hoy, click cat→hist
+   - Tanda 1: modelo documentado, helpers temporales, carga defensiva, sort centralizado
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const CATEGORIES_EXPENSE = ['Gastos varios','Universidad','Salida Mica','Salida amigos','Desayuno','Almuerzo','Cena','Cuidado personal','Educación','Lujo','Ropa','Bebidas','Emergencia','Transporte','Hogar','Suscripción'];
@@ -620,7 +726,90 @@ function safeSet(key, value) {
   }
 }
 
-let entries = safeGet('rl_entries', []);
+/* ─── Modelo del entry y helpers temporales/validación ──────────────
+ * Shape de un entry (contrato del sistema, NO agregar campos):
+ *   { id: string,
+ *     type: 'expense' | 'income',
+ *     amount: number (>0),
+ *     cat: string,           // debe estar en CATEGORIES_EXPENSE o CATEGORIES_INCOME
+ *     medio: string | null,  // obligatorio para expense, null para income
+ *     date: string (ISO),    // fecha real del gasto/ingreso
+ *     note: string,
+ *     raw: string }
+ *
+ * RL Gastos es un tracker de consumo, NO un sistema de flujo de caja.
+ * Por diseño, el modelo NO incluye: dueDate, impactDate, status,
+ * scheduled, pending, refinanced. Esos conceptos pertenecen a FLUXRL.
+ * ─────────────────────────────────────────────────────────────────── */
+
+function isValidDateISO(value) {
+  if (typeof value !== 'string') return false;
+  const d = new Date(value);
+  return !isNaN(d.getTime());
+}
+function isSameMonth(dateStr, refDate) {
+  const ref = refDate instanceof Date ? refDate : new Date();
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return false;
+  return d.getMonth() === ref.getMonth() && d.getFullYear() === ref.getFullYear();
+}
+function toLocalDateTimeInputValue(isoStr) {
+  const d = new Date(isoStr);
+  if (isNaN(d.getTime())) return '';
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+    .toISOString()
+    .slice(0, 16);
+}
+function fromDateTimeInputValue(inputValue) {
+  if (!inputValue) return null;
+  const d = new Date(inputValue);
+  return isNaN(d.getTime()) ? null : d.toISOString();
+}
+function sortEntriesDesc(list) {
+  return [...list].sort((a, b) => new Date(b.date) - new Date(a.date));
+}
+
+function validateEntry(entry) {
+  if (!entry || typeof entry !== 'object') return 'Entrada inválida';
+  if (!Number.isFinite(entry.amount) || entry.amount <= 0) return 'Monto inválido';
+  if (!isValidDateISO(entry.date)) return 'Fecha inválida';
+  if (entry.type !== 'expense' && entry.type !== 'income') return 'Tipo inválido';
+  if (entry.type === 'expense' && !CATEGORIES_EXPENSE.includes(entry.cat)) return 'Categoría inválida';
+  if (entry.type === 'income' && !CATEGORIES_INCOME.includes(entry.cat)) return 'Categoría inválida';
+  if (entry.type === 'expense' && !MEDIOS.includes(entry.medio)) return 'Medio de pago inválido';
+  return null;
+}
+
+/* Sanidad mínima al cargar entries de localStorage: filtra sólo los que
+ * romperían el render (fechas inválidas, tipos rotos, montos no numéricos)
+ * y normaliza campos opcionales. NO valida cat/medio estrictamente porque
+ * categorías/medios pueden haberse renombrado entre versiones. */
+function isEntryLoadSafe(e) {
+  return e &&
+    typeof e === 'object' &&
+    typeof e.amount === 'number' &&
+    Number.isFinite(e.amount) &&
+    typeof e.type === 'string' &&
+    (e.type === 'expense' || e.type === 'income') &&
+    typeof e.date === 'string' &&
+    isValidDateISO(e.date) &&
+    typeof e.cat === 'string';
+}
+function normalizeEntry(e) {
+  return {
+    ...e,
+    id: typeof e.id === 'string' && e.id ? e.id : (Date.now().toString() + Math.random().toString(16).slice(2,8)),
+    medio: e.type === 'expense' ? (typeof e.medio === 'string' ? e.medio : 'Efectivo') : null,
+    note: typeof e.note === 'string' ? e.note : '',
+    raw: typeof e.raw === 'string' ? e.raw : ''
+  };
+}
+
+const _rawEntries = safeGet('rl_entries', []) || [];
+let entries = (Array.isArray(_rawEntries) ? _rawEntries : []).filter(isEntryLoadSafe).map(normalizeEntry);
+if (entries.length !== _rawEntries.length) {
+  console.warn('[RL Gastos] Descartados ' + (_rawEntries.length - entries.length) + ' entries inválidos al cargar');
+}
 let budgets = safeGet('rl_budgets', null) || {...DEFAULT_BUDGETS};
 let alertedCats = safeGet('rl_alerted', {});
 let currentType = 'expense';
@@ -635,6 +824,49 @@ let showSummaryMedios = false;
 let editingId = null;
 let editingSelectedCat = null;
 let editingSelectedMedio = null;
+
+/* Tanda 3: mes seleccionado en la vista "Mes". Default = mes actual.
+ * Sólo afecta renderResumen cuando currentPeriod === 'mes'. Header,
+ * quick stats, streak, checkBudgetAlert siguen usando mes actual. */
+let selectedMonth = { year: new Date().getFullYear(), month: new Date().getMonth() };
+
+function getSelectedMonthDate() {
+  return new Date(selectedMonth.year, selectedMonth.month, 1);
+}
+function isInSelectedMonth(dateStr) {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return false;
+  return d.getFullYear() === selectedMonth.year && d.getMonth() === selectedMonth.month;
+}
+function isSelectedMonthCurrent() {
+  const now = new Date();
+  return selectedMonth.year === now.getFullYear() && selectedMonth.month === now.getMonth();
+}
+function incSelectedMonth(delta) {
+  const candidate = new Date(selectedMonth.year, selectedMonth.month + delta, 1);
+  const now = new Date();
+  // No permitir navegar al futuro
+  if (candidate.getFullYear() > now.getFullYear() ||
+      (candidate.getFullYear() === now.getFullYear() && candidate.getMonth() > now.getMonth())) {
+    return;
+  }
+  selectedMonth = { year: candidate.getFullYear(), month: candidate.getMonth() };
+  renderMonthNav();
+  renderResumen();
+}
+function renderMonthNav() {
+  const nav = document.getElementById('monthNav');
+  if (!nav) return;
+  if (currentPeriod !== 'mes') { nav.style.display = 'none'; return; }
+  nav.style.display = '';
+  const label = document.getElementById('monthNavLabel');
+  if (label) label.textContent = getMonthLabel(getSelectedMonthDate());
+  const nextBtn = document.getElementById('monthNavNext');
+  if (nextBtn) {
+    if (isSelectedMonthCurrent()) nextBtn.setAttribute('disabled', 'disabled');
+    else nextBtn.removeAttribute('disabled');
+  }
+}
 
 function save() {
   safeSet('rl_entries', entries);
@@ -739,7 +971,11 @@ function daysRemainingInMonth() {
   return last - now.getDate();
 }
 
-function checkBudgetAlert(cat, newAmount) {
+function checkBudgetAlert(cat, newAmount, entryDate) {
+  // Guard: sólo disparar alertas si el entry pertenece al mes actual.
+  // Entries retroactivos (editados con fecha pasada) no deben generar falsos
+  // positivos tipo "¡pasaste el presupuesto!" porque ya está fuera de ventana.
+  if (entryDate && !isSameMonth(entryDate)) return;
   const limit = budgets[cat];
   if (!limit || limit <= 0) return;
   const byCat = getMonthExpensesByCategory();
@@ -809,7 +1045,7 @@ function filterByPeriod(arr, period) {
       wk.setDate(today.getDate() - day);
       return d >= wk;
     }
-    if (period === 'mes') return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    if (period === 'mes') return d.getMonth() === selectedMonth.month && d.getFullYear() === selectedMonth.year;
     return true;
   });
 }
@@ -851,7 +1087,8 @@ function parseInput() {
     }
     if (count === 0) { showToast('No encontré montos'); return; }
     save();
-    Object.entries(affectedCats).forEach(([cat, amt]) => checkBudgetAlert(cat, amt));
+    const nowIso = new Date().toISOString();
+    Object.entries(affectedCats).forEach(([cat, amt]) => checkBudgetAlert(cat, amt, nowIso));
     const inp = document.getElementById('mainInput');
     inp.value = ''; inp.style.height = '110px';
     showToast(count + ' registros · ' + formatGs(total));
@@ -866,7 +1103,7 @@ function parseInput() {
   selectedCat = cat; selectedMedio = medio;
   document.getElementById('confAmount').textContent = formatGs(amount);
   document.getElementById('confAmount').className = 'confirm-amount-display' + (currentType === 'income' ? ' income-val' : '');
-  document.getElementById('confDate').textContent = formatDate(now);
+  document.getElementById('confDate').value = toLocalDateTimeInputValue(now);
   document.getElementById('noteInput').value = '';
   const cats = currentType === 'income' ? CATEGORIES_INCOME : CATEGORIES_EXPENSE;
   document.getElementById('catSelector').innerHTML = cats.map(c => '<button class="selector-chip' + (c === cat ? ' selected' : '') + '" onclick="selectCat(this,\'' + c + '\')">' + c + '</button>').join('');
@@ -886,10 +1123,20 @@ function selectMedio(el, medio) { selectedMedio = medio; el.parentElement.queryS
 
 function saveEntry() {
   if (!pendingEntry) return;
-  const finalEntry = { ...pendingEntry, cat: selectedCat, medio: selectedMedio, note: document.getElementById('noteInput').value.trim(), id: Date.now().toString() + Math.random().toString(16).slice(2,8) };
+  const dateIso = fromDateTimeInputValue(document.getElementById('confDate').value) || pendingEntry.date;
+  const finalEntry = {
+    ...pendingEntry,
+    cat: selectedCat,
+    medio: selectedMedio,
+    note: document.getElementById('noteInput').value.trim(),
+    date: dateIso,
+    id: Date.now().toString() + Math.random().toString(16).slice(2,8)
+  };
+  const err = validateEntry(finalEntry);
+  if (err) { showToast(err, 'danger'); return; }
   entries.unshift(finalEntry);
   save();
-  if (finalEntry.type === 'expense') checkBudgetAlert(finalEntry.cat, finalEntry.amount);
+  if (finalEntry.type === 'expense') checkBudgetAlert(finalEntry.cat, finalEntry.amount, finalEntry.date);
   cancelConfirm();
   const inp = document.getElementById('mainInput');
   inp.value = ''; inp.style.height = '110px';
@@ -910,7 +1157,7 @@ function openEditModal(id) {
   document.getElementById('editAmountDisplay').className = 'confirm-amount-display' + (entry.type === 'income' ? ' income-val' : '');
   document.getElementById('editAmountInput').value = entry.amount;
   document.getElementById('editNoteInput').value = entry.note || '';
-  document.getElementById('editDateDisplay').textContent = formatDate(entry.date);
+  document.getElementById('editDateDisplay').value = toLocalDateTimeInputValue(entry.date);
   const cats = entry.type === 'income' ? CATEGORIES_INCOME : CATEGORIES_EXPENSE;
   document.getElementById('editCatSelector').innerHTML = cats.map(c => '<button class="selector-chip' + (c === entry.cat ? ' selected' : '') + '" onclick="selectEditCat(this,\'' + c + '\')">' + c + '</button>').join('');
   const editMedioSection = document.getElementById('editMedioSection');
@@ -947,13 +1194,18 @@ function saveEditEntry() {
   if (idx === -1) { closeEditModal(); return; }
   const newAmount = parseInt(document.getElementById('editAmountInput').value) || entries[idx].amount;
   const newNote = document.getElementById('editNoteInput').value.trim();
-  entries[idx] = {
+  const editedIso = fromDateTimeInputValue(document.getElementById('editDateDisplay').value) || entries[idx].date;
+  const updated = {
     ...entries[idx],
     amount: newAmount,
     cat: editingSelectedCat,
     medio: entries[idx].type === 'expense' ? editingSelectedMedio : null,
-    note: newNote
+    note: newNote,
+    date: editedIso
   };
+  const err = validateEntry(updated);
+  if (err) { showToast(err, 'danger'); return; }
+  entries[idx] = updated;
   save();
   closeEditModal();
   renderHistorial();
@@ -986,6 +1238,7 @@ function setPeriod(period, btn) {
   document.querySelectorAll('.period-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   updatePeriodSlider();
+  renderMonthNav();
   renderResumen();
 }
 
@@ -1038,6 +1291,7 @@ function buildProgressRing(status, pct) {
 function renderResumen() {
   updatePeriodSlider();
   updateMonthBadge();
+  renderMonthNav();
   const filtered = filterByPeriod(entries, currentPeriod);
   const expenses = filtered.filter(e => e.type === 'expense');
   const incomes = filtered.filter(e => e.type === 'income');
@@ -1053,6 +1307,7 @@ function renderResumen() {
 
   const periodNames = { hoy:'hoy', semana:'esta semana', mes:'este mes', todo:'total acumulado' };
   const now = new Date();
+  const isCurrentMonth = isSelectedMonthCurrent();
   const monthBudgetTotal = Object.values(budgets).reduce((s, v) => s + (v || 0), 0);
   const monthMode = currentPeriod === 'mes' && monthBudgetTotal > 0;
 
@@ -1116,19 +1371,37 @@ function renderResumen() {
   if (monthMode) {
     const pct = monthBudgetTotal ? (totalExp / monthBudgetTotal) * 100 : 0;
     const remaining = monthBudgetTotal - totalExp;
-    const daysLeft = daysRemainingInMonth();
     const status = pct >= 100 ? 'danger' : pct >= 70 ? 'warning' : 'safe';
-    const elapsedDays = Math.max(1, now.getDate());
-    const avgDaily = totalExp / elapsedDays;
-    const daysTotal = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
-    const projected = Math.round(avgDaily * daysTotal);
-    const projStatus = projected >= monthBudgetTotal ? 'danger' : projected >= monthBudgetTotal * 0.9 ? 'warning' : 'safe';
+
+    let subLabel, projectionHtml;
+    if (isCurrentMonth) {
+      const daysLeft = daysRemainingInMonth();
+      const elapsedDays = Math.max(1, now.getDate());
+      const avgDaily = totalExp / elapsedDays;
+      const daysTotal = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+      const projected = Math.round(avgDaily * daysTotal);
+      const projStatus = projected >= monthBudgetTotal ? 'danger' : projected >= monthBudgetTotal * 0.9 ? 'warning' : 'safe';
+      subLabel = daysLeft + ' ' + (daysLeft === 1 ? 'día restante' : 'días restantes');
+      projectionHtml =
+        '<div class="summary-hero-foot-item right">' +
+          '<small>Cierre proyectado</small>' +
+          '<strong class="' + projStatus + '">' + formatGs(projected) + '</strong>' +
+        '</div>';
+    } else {
+      subLabel = 'Mes cerrado';
+      projectionHtml =
+        '<div class="summary-hero-foot-item right">' +
+          '<small>Cierre real</small>' +
+          '<strong>' + formatGs(totalExp) + '</strong>' +
+        '</div>';
+    }
+
     budgetHero =
       '<div class="summary-hero-hybrid ' + status + ' fade-in-up" style="opacity:0">' +
         '<div class="summary-hero-top">' +
           '<div>' +
             '<div class="summary-hero-kicker">Presupuesto del mes</div>' +
-            '<div class="summary-hero-sub">' + daysLeft + ' ' + (daysLeft === 1 ? 'día restante' : 'días restantes') + '</div>' +
+            '<div class="summary-hero-sub">' + subLabel + '</div>' +
           '</div>' +
           buildProgressRing(status, pct) +
         '</div>' +
@@ -1136,30 +1409,56 @@ function renderResumen() {
         '<div class="summary-hero-bar"><div class="summary-hero-bar-fill ' + status + '" style="width:' + Math.min(100, Math.round(pct)) + '%"></div></div>' +
         '<div class="summary-hero-foot">' +
           '<div class="summary-hero-foot-item">' +
-            '<small>' + (remaining >= 0 ? 'Disponible' : 'Excedido') + '</small>' +
+            '<small>' + (remaining >= 0 ? (isCurrentMonth ? 'Disponible' : 'No gastado') : 'Excedido') + '</small>' +
             '<strong>' + formatGs(Math.abs(remaining)) + '</strong>' +
           '</div>' +
-          '<div class="summary-hero-foot-item right">' +
-            '<small>Cierre proyectado</small>' +
-            '<strong class="' + projStatus + '">' + formatGs(projected) + '</strong>' +
-          '</div>' +
+          projectionHtml +
         '</div>' +
       '</div>';
   }
 
   /* Daily chart con línea de promedio + label hoy */
   let dailySection = '';
-  if (currentPeriod === 'semana' || currentPeriod === 'mes') {
-    const totalDays = currentPeriod === 'semana' ? 7 : Math.min(now.getDate(), 14);
+  if ((currentPeriod === 'semana' || currentPeriod === 'mes') && totalExp > 0) {
     const dayLabels = ['D','L','M','X','J','V','S'];
     const dailyTotals = [];
-    for (let i = totalDays - 1; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
-      const dayStart = new Date(d);
-      const dayEnd = new Date(d); dayEnd.setDate(d.getDate() + 1);
-      const total = expenses.filter(e => { const ed = new Date(e.date); return ed >= dayStart && ed < dayEnd; }).reduce((s, e) => s + e.amount, 0);
-      dailyTotals.push({ total, label: currentPeriod === 'semana' ? dayLabels[d.getDay()] : d.getDate(), isToday: i === 0 });
+
+    if (currentPeriod === 'semana') {
+      // Últimos 7 días relativos a hoy
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+        const dayStart = new Date(d);
+        const dayEnd = new Date(d); dayEnd.setDate(d.getDate() + 1);
+        const total = expenses.filter(e => { const ed = new Date(e.date); return ed >= dayStart && ed < dayEnd; }).reduce((s, e) => s + e.amount, 0);
+        dailyTotals.push({ total, label: dayLabels[d.getDay()], isToday: i === 0 });
+      }
+    } else if (isCurrentMonth) {
+      // Mes actual: últimos 14 días (o los que hayan transcurrido si es principio de mes)
+      const totalDays = Math.min(now.getDate(), 14);
+      for (let i = totalDays - 1; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+        const dayStart = new Date(d);
+        const dayEnd = new Date(d); dayEnd.setDate(d.getDate() + 1);
+        const total = expenses.filter(e => { const ed = new Date(e.date); return ed >= dayStart && ed < dayEnd; }).reduce((s, e) => s + e.amount, 0);
+        dailyTotals.push({ total, label: d.getDate(), isToday: i === 0 });
+      }
+    } else {
+      // Mes pasado: últimos 14 días de ese mes (nunca hay "hoy" en un mes pasado)
+      const daysInMonth = new Date(selectedMonth.year, selectedMonth.month + 1, 0).getDate();
+      const startDay = Math.max(1, daysInMonth - 13);
+      for (let day = startDay; day <= daysInMonth; day++) {
+        const d = new Date(selectedMonth.year, selectedMonth.month, day);
+        const dayStart = new Date(d);
+        const dayEnd = new Date(d); dayEnd.setDate(d.getDate() + 1);
+        const total = expenses.filter(e => { const ed = new Date(e.date); return ed >= dayStart && ed < dayEnd; }).reduce((s, e) => s + e.amount, 0);
+        dailyTotals.push({ total, label: day, isToday: false });
+      }
     }
+
+    const totalDays = dailyTotals.length;
+    const chartSubtitle = currentPeriod === 'semana' ? 'Últimos 7 días' :
+                          isCurrentMonth ? 'Últimos ' + totalDays + ' días' :
+                          'Últimos ' + totalDays + ' días del mes';
     const maxDay = Math.max(...dailyTotals.map(d => d.total), 1);
     const daysWithSpending = dailyTotals.filter(d => d.total > 0);
     const avg = daysWithSpending.length > 0
@@ -1176,7 +1475,7 @@ function renderResumen() {
         '<div class="hybrid-section-head">' +
           '<div>' +
             '<div class="hybrid-section-title">Ritmo de gasto</div>' +
-            '<div class="hybrid-section-sub">' + (currentPeriod === 'semana' ? 'Últimos 7 días' : 'Últimos ' + totalDays + ' días') + '</div>' +
+            '<div class="hybrid-section-sub">' + chartSubtitle + '</div>' +
           '</div>' +
         '</div>' +
         '<div class="daily-shell">' +
@@ -1216,6 +1515,7 @@ function renderResumen() {
           '<div class="summary-mini-meta">Balance ' + (net >= 0 ? 'positivo' : 'negativo') + '</div>' +
         '</div>' +
       '</div>' +
+      (catEntries.length > 0 ?
       '<div class="hybrid-section stagger-2 fade-in-up" style="opacity:0">' +
         '<div class="hybrid-section-head">' +
           '<div>' +
@@ -1244,7 +1544,7 @@ function renderResumen() {
             '</div>';
           }).join('') +
         '</div>' +
-      '</div>' +
+      '</div>' : '') +
       dailySection +
       (medioEntries.length ?
         '<div class="hybrid-section stagger-4 fade-in-up" style="opacity:0">' +
@@ -1335,6 +1635,10 @@ function renderHistorial() {
     el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">≡</div><span class="empty-state-text">' + (currentSearch ? 'Sin resultados' : 'Sin registros') + '</span></div>';
     return;
   }
+  // Ordenar por fecha descendente antes de agrupar. Garantiza que los días
+  // aparezcan en orden cronológico correcto aunque entries no esté ordenado
+  // (ej. después de editar fechas en Tanda 2).
+  filtered = sortEntriesDesc(filtered);
   const groups = {};
   filtered.forEach(e => {
     const key = new Date(e.date).toDateString();
@@ -1525,6 +1829,113 @@ function exportCSV() {
   a.click();
   URL.revokeObjectURL(url);
   showToast('CSV exportado');
+}
+
+/* ─── Tanda 4: Extracto imprimible / PDF ─────────────────────────
+ * Renderiza un one-pager limpio del mes seleccionado en #printContainer
+ * y dispara window.print(). En el diálogo nativo del navegador/iOS el
+ * usuario puede guardar como PDF. No depende de jsPDF ni libs externas. */
+function renderPrintableExtracto() {
+  const monthDate = getSelectedMonthDate();
+  const monthLabel = getMonthLabel(monthDate);
+  const monthEntries = entries.filter(e => isInSelectedMonth(e.date));
+  const monthExpenses = monthEntries.filter(e => e.type === 'expense');
+  const monthIncomes = monthEntries.filter(e => e.type === 'income');
+  const totalExp = monthExpenses.reduce((s, e) => s + e.amount, 0);
+  const totalInc = monthIncomes.reduce((s, e) => s + e.amount, 0);
+  const netMes = totalInc - totalExp;
+  const monthBudgetTotal = Object.values(budgets).reduce((s, v) => s + (v || 0), 0);
+
+  // Por categoría
+  const byCat = {};
+  monthExpenses.forEach(e => { byCat[e.cat] = (byCat[e.cat] || 0) + e.amount; });
+  const catRows = Object.entries(byCat).sort((a,b) => b[1] - a[1]).map(([cat, amt]) => {
+    const limit = budgets[cat] || 0;
+    const sharePct = totalExp > 0 ? Math.round((amt/totalExp)*100) : 0;
+    const limitPct = limit > 0 ? Math.round((amt/limit)*100) + '%' : '—';
+    return '<tr><td>' + cat + '</td><td class="right">' + formatGs(amt) + '</td><td class="right">' + sharePct + '%</td><td class="right">' + (limit > 0 ? formatGs(limit) : '—') + '</td><td class="right">' + limitPct + '</td></tr>';
+  }).join('');
+
+  // Por medio
+  const byMedio = {};
+  monthExpenses.forEach(e => { if (e.medio) byMedio[e.medio] = (byMedio[e.medio] || 0) + e.amount; });
+  const medioRows = Object.entries(byMedio).sort((a,b) => b[1] - a[1]).map(([medio, amt]) => {
+    const pct = totalExp > 0 ? Math.round((amt/totalExp)*100) : 0;
+    return '<tr><td>' + medio + '</td><td class="right">' + formatGs(amt) + '</td><td class="right">' + pct + '%</td></tr>';
+  }).join('');
+
+  // Detalle por día (descendente)
+  const sorted = sortEntriesDesc(monthEntries);
+  const groups = {};
+  sorted.forEach(e => {
+    const key = new Date(e.date).toDateString();
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(e);
+  });
+  let detailHtml = '';
+  for (const items of Object.values(groups)) {
+    const dayTotal = items.reduce((s,e) => e.type === 'expense' ? s+e.amount : s, 0);
+    const dayLabel = new Date(items[0].date).toLocaleDateString('es-PY', {weekday:'long', day:'numeric', month:'short'});
+    const dayLabelCap = dayLabel.charAt(0).toUpperCase() + dayLabel.slice(1);
+    detailHtml += '<div class="print-day-header">' + dayLabelCap + (dayTotal ? ' · ' + formatGs(dayTotal) : '') + '</div>';
+    detailHtml += '<table class="print-table"><tbody>';
+    for (const e of items) {
+      const timeStr = new Date(e.date).toLocaleTimeString('es-PY', {hour:'2-digit', minute:'2-digit'});
+      const sign = e.type === 'income' ? '+' : '';
+      detailHtml += '<tr>' +
+        '<td style="width:42px">' + timeStr + '</td>' +
+        '<td>' + e.cat + (e.note ? ' — ' + e.note : '') + '</td>' +
+        '<td style="color:#555">' + (e.medio || (e.type === 'income' ? 'Ingreso' : '')) + '</td>' +
+        '<td class="right">' + sign + formatGs(e.amount) + '</td>' +
+      '</tr>';
+    }
+    detailHtml += '</tbody></table>';
+  }
+
+  const generatedAt = new Date().toLocaleDateString('es-PY', { day: '2-digit', month: 'long', year: 'numeric' }) +
+    ' · ' + new Date().toLocaleTimeString('es-PY', { hour: '2-digit', minute: '2-digit' });
+
+  let budgetKv = '';
+  if (monthBudgetTotal > 0) {
+    const pct = Math.round((totalExp / monthBudgetTotal) * 100);
+    const diff = totalExp - monthBudgetTotal;
+    budgetKv =
+      '<div class="print-kv"><span>Presupuesto total del mes</span><strong>' + formatGs(monthBudgetTotal) + '</strong></div>' +
+      '<div class="print-kv"><span>Consumido</span><strong>' + pct + '% (' + (diff >= 0 ? '+' : '') + formatGs(diff) + ')</strong></div>';
+  }
+
+  return '<div class="print-header">' +
+      '<div class="print-title">RL Gastos — Extracto de ' + monthLabel + '</div>' +
+      '<div class="print-subtitle">Generado el ' + generatedAt + '</div>' +
+    '</div>' +
+    '<div class="print-section">' +
+      '<div class="print-section-title">Resumen</div>' +
+      '<div class="print-kv"><span>Total gastos</span><strong>' + formatGs(totalExp) + '</strong></div>' +
+      '<div class="print-kv"><span>Total ingresos</span><strong>' + formatGs(totalInc) + '</strong></div>' +
+      '<div class="print-kv"><span>Balance</span><strong>' + (netMes >= 0 ? '+' : '') + formatGs(netMes) + '</strong></div>' +
+      '<div class="print-kv"><span>Registros</span><strong>' + monthEntries.length + '</strong></div>' +
+      budgetKv +
+    '</div>' +
+    (catRows ? '<div class="print-section"><div class="print-section-title">Por categoría</div><table class="print-table"><thead><tr><th>Categoría</th><th class="right">Monto</th><th class="right">% total</th><th class="right">Presupuesto</th><th class="right">% consumido</th></tr></thead><tbody>' + catRows + '</tbody></table></div>' : '') +
+    (medioRows ? '<div class="print-section"><div class="print-section-title">Por medio de pago</div><table class="print-table"><thead><tr><th>Medio</th><th class="right">Monto</th><th class="right">% total</th></tr></thead><tbody>' + medioRows + '</tbody></table></div>' : '') +
+    (detailHtml ? '<div class="print-section"><div class="print-section-title">Detalle</div>' + detailHtml + '</div>' : '');
+}
+
+function printExtracto() {
+  const container = document.getElementById('printContainer');
+  if (!container) return;
+  const monthEntries = entries.filter(e => isInSelectedMonth(e.date));
+  if (monthEntries.length === 0) {
+    showToast('Sin registros en ' + getMonthLabel(getSelectedMonthDate()));
+    return;
+  }
+  container.innerHTML = renderPrintableExtracto();
+  // Pequeño delay para que el DOM se pinte antes de disparar el print dialog
+  setTimeout(() => {
+    window.print();
+    // Limpiar después de que el diálogo se cierre (libera memoria)
+    setTimeout(() => { container.innerHTML = ''; }, 1000);
+  }, 60);
 }
 
 /* ─── Clear All (FIX: limpia TODO el estado) ────────────────────── */
