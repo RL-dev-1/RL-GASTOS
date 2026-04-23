@@ -660,50 +660,8 @@ body { max-width: 480px; margin: 0 auto; border-left: 0.5px solid var(--line); b
    - Bug fixes: clearAll, budgetStatus, CSV escape, safe storage
    - Nuevas features: streak, edit entry, search, context Hoy, click cat→hist
    - Tanda 1: modelo documentado, helpers temporales, carga defensiva, sort centralizado
+   - Fase 1 (v2): schema_version, IDs con prefijo, config viva, migración segura
    ═══════════════════════════════════════════════════════════════════════════ */
-
-const CATEGORIES_EXPENSE = ['Gastos varios','Universidad','Salida Mica','Salida amigos','Desayuno','Almuerzo','Cena','Cuidado personal','Educación','Lujo','Ropa','Bebidas','Emergencia','Transporte','Hogar','Suscripción'];
-const CATEGORIES_INCOME = ['Interés','Salario','Viático','Otro ingreso'];
-const MEDIOS = ['Efectivo','Débito Itaú','TC Itaú Normal','TC Itaú Black','TC Atlas','TC GNB','TC Sudameris Plus','TC Sudameris Clásica'];
-const CAT_ICONS = {'Gastos varios':'○','Universidad':'◇','Salida Mica':'♡','Salida amigos':'△','Desayuno':'◑','Almuerzo':'●','Cena':'◐','Cuidado personal':'◈','Educación':'□','Lujo':'✦','Ropa':'▪','Bebidas':'◉','Emergencia':'⚡','Transporte':'→','Hogar':'⌂','Suscripción':'↻','Interés':'↗','Salario':'$','Viático':'↗','Otro ingreso':'+'};
-const CAT_KEYWORDS = {
-  'Universidad':['uni','universidad','ucatolica','católica','cuota uni','matrícula'],
-  'Salida Mica':['mica','amor','salida mica','cena mica','date'],
-  'Salida amigos':['amigos','amigo','salida amigos','boliche','bar','joda'],
-  'Desayuno':['desayuno','café','coffee','cafetería','panadería','pan','medialunas'],
-  'Almuerzo':['almuerzo','lunch','comida','super','supermercado','market','mercado'],
-  'Cena':['cena','dinner','pizza'],
-  'Cuidado personal':['barberia','barbería','gym','peluquería','farmacia','farma','crema'],
-  'Educación':['libro','libros','curso','ingles','inglés','anglo','educación','idioma'],
-  'Lujo':['lujo','reloj','electrónico','electronico','gadget','apple','iphone','mac','tech'],
-  'Ropa':['ropa','zapatilla','zapato','camisa','pantalon','pantalón','zapatillas','remera'],
-  'Bebidas':['bebida','cerveza','alcohol','whisky','vino','trago','fernet','birra'],
-  'Emergencia':['emergencia','urgencia','médico','medico','hospital'],
-  'Transporte':['uber','taxi','bolt','bus','nafta','estacionamiento','combustible','gasolina'],
-  'Hogar':['hogar','limpieza','luz','agua','internet','alquiler','expensa'],
-  'Suscripción':['suscripción','suscripcion','netflix','spotify','youtube','premium','hbo','disney'],
-  'Interés':['interés','interes','cobro','cuota cobrada','rendimiento'],
-  'Salario':['salario','sueldo','pago trabajo','nómina'],
-  'Viático':['viatico','viático','viaje'],
-  'Otro ingreso':['otro ingreso','extra','freelance','venta']
-};
-const MEDIO_KEYWORDS = {
-  'Efectivo':['efectivo','cash','en mano'],
-  'Débito Itaú':['débito itaú','debito itaú','débito itau','debito itau','debito'],
-  'TC Itaú Normal':['itaú normal','itau normal','tc itaú normal','tc itau normal'],
-  'TC Itaú Black':['black','itaú black','itau black','5881'],
-  'TC Atlas':['atlas','tc atlas'],
-  'TC GNB':['gnb','tc gnb','banco gnb'],
-  'TC Sudameris Plus':['sudameris plus','tc sudameris plus'],
-  'TC Sudameris Clásica':['sudameris clásica','sudameris clasica','tc sudameris clásica','tc sudameris clasica','sudameris']
-};
-const DEFAULT_BUDGETS = {
-  'Desayuno':100000,'Almuerzo':200000,'Cena':200000,'Gastos varios':300000,
-  'Universidad':888500,'Salida Mica':800000,'Salida amigos':300000,
-  'Cuidado personal':1010000,'Educación':550000,'Transporte':700000,
-  'Suscripción':200000,'Ropa':300000,'Bebidas':100000,'Hogar':200000,
-  'Lujo':0,'Emergencia':0
-};
 
 /* ─── Safe storage (FIX: try/catch para JSON corrupto) ───────────── */
 function safeGet(key, fallback) {
@@ -726,22 +684,132 @@ function safeSet(key, value) {
   }
 }
 
-/* ─── Modelo del entry y helpers temporales/validación ──────────────
- * Shape de un entry (contrato del sistema, NO agregar campos):
- *   { id: string,
- *     type: 'expense' | 'income',
- *     amount: number (>0),
- *     cat: string,           // debe estar en CATEGORIES_EXPENSE o CATEGORIES_INCOME
- *     medio: string | null,  // obligatorio para expense, null para income
- *     date: string (ISO),    // fecha real del gasto/ingreso
- *     note: string,
- *     raw: string }
- *
- * RL Gastos es un tracker de consumo, NO un sistema de flujo de caja.
- * Por diseño, el modelo NO incluye: dueDate, impactDate, status,
- * scheduled, pending, refinanced. Esos conceptos pertenecen a FLUXRL.
- * ─────────────────────────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════
+   FASE 1 — MODELO DE DATOS ESTABLE
+   ═══════════════════════════════════════════════════════════════════
+   Introduce schema versioning, IDs con prefijo, config viva para
+   categorías y medios, migración segura con backup previo y validación
+   en dos pasos. La app se sigue viendo idéntica para el usuario.
 
+   Claves en localStorage:
+     rl_manifest         — meta: schema_version, fechas, referencias
+     rl_entries          — array de entries (usa categoryId/paymentMethodId)
+     rl_categories       — array de categorías activas/archivadas
+     rl_payment_methods  — array de medios activos/archivados
+     rl_budgets          — { [categoryId]: number }
+     rl_alerted          — alertas disparadas por mes
+     rl_backup_v1_*      — snapshots pre-migración (no se borran)
+
+   Modelo de category/paymentMethod:
+     { id: "cat_xxx" | "pay_xxx",
+       name: string,           // visible al usuario
+       type?: "expense"|"income", // sólo para category
+       keywords: string[],
+       active: boolean,
+       legacyNames: string[],  // nombres anteriores, para mapeo
+       createdAt: ISO,
+       updatedAt: ISO,
+       archivedAt?: ISO }
+
+   Modelo de entry (Fase 1):
+     { id: string,
+       type: "expense"|"income",
+       amount: number,
+       categoryId: "cat_xxx",
+       paymentMethodId: "pay_xxx"|null,
+       note: string,
+       raw: string,
+       date: ISO,
+       createdAt: ISO,
+       updatedAt: ISO }
+
+   Compatibilidad: el código interno sigue llamando "cat" al campo por
+   costo/riesgo, pero ahora "cat" guarda un ID ("cat_almuerzo") en vez
+   de un nombre ("Almuerzo"). Las funciones de render traducen al vuelo.
+   ═══════════════════════════════════════════════════════════════════ */
+
+const SCHEMA_VERSION = 2;
+
+/* Seed inicial: mismos valores que antes, pero ahora con IDs estables.
+ * slug() genera IDs reproducibles desde nombres. */
+function slug(s) {
+  return s.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+const SEED_CATEGORIES_EXPENSE_NAMES = ['Gastos varios','Universidad','Salida Mica','Salida amigos','Desayuno','Almuerzo','Cena','Cuidado personal','Educación','Lujo','Ropa','Bebidas','Emergencia','Transporte','Hogar','Suscripción'];
+const SEED_CATEGORIES_INCOME_NAMES = ['Interés','Salario','Viático','Otro ingreso'];
+const SEED_MEDIOS_NAMES = ['Efectivo','Débito Itaú','TC Itaú Normal','TC Itaú Black','TC Atlas','TC GNB','TC Sudameris Plus','TC Sudameris Clásica'];
+
+const CAT_ICONS = {'Gastos varios':'○','Universidad':'◇','Salida Mica':'♡','Salida amigos':'△','Desayuno':'◑','Almuerzo':'●','Cena':'◐','Cuidado personal':'◈','Educación':'□','Lujo':'✦','Ropa':'▪','Bebidas':'◉','Emergencia':'⚡','Transporte':'→','Hogar':'⌂','Suscripción':'↻','Interés':'↗','Salario':'$','Viático':'↗','Otro ingreso':'+'};
+
+const SEED_CAT_KEYWORDS = {
+  'Universidad':['uni','universidad','ucatolica','católica','cuota uni','matrícula'],
+  'Salida Mica':['mica','amor','salida mica','cena mica','date'],
+  'Salida amigos':['amigos','amigo','salida amigos','boliche','bar','joda'],
+  'Desayuno':['desayuno','café','coffee','cafetería','panadería','pan','medialunas'],
+  'Almuerzo':['almuerzo','lunch','comida','super','supermercado','market','mercado'],
+  'Cena':['cena','dinner','pizza'],
+  'Cuidado personal':['barberia','barbería','gym','peluquería','farmacia','farma','crema'],
+  'Educación':['libro','libros','curso','ingles','inglés','anglo','educación','idioma'],
+  'Lujo':['lujo','reloj','electrónico','electronico','gadget','apple','iphone','mac','tech'],
+  'Ropa':['ropa','zapatilla','zapato','camisa','pantalon','pantalón','zapatillas','remera'],
+  'Bebidas':['bebida','cerveza','alcohol','whisky','vino','trago','fernet','birra'],
+  'Emergencia':['emergencia','urgencia','médico','medico','hospital'],
+  'Transporte':['uber','taxi','bolt','bus','nafta','estacionamiento','combustible','gasolina'],
+  'Hogar':['hogar','limpieza','luz','agua','internet','alquiler','expensa'],
+  'Suscripción':['suscripción','suscripcion','netflix','spotify','youtube','premium','hbo','disney'],
+  'Interés':['interés','interes','cobro','cuota cobrada','rendimiento'],
+  'Salario':['salario','sueldo','pago trabajo','nómina'],
+  'Viático':['viatico','viático','viaje'],
+  'Otro ingreso':['otro ingreso','extra','freelance','venta']
+};
+const SEED_MEDIO_KEYWORDS = {
+  'Efectivo':['efectivo','cash','en mano'],
+  'Débito Itaú':['débito itaú','debito itaú','débito itau','debito itau','debito'],
+  'TC Itaú Normal':['itaú normal','itau normal','tc itaú normal','tc itau normal'],
+  'TC Itaú Black':['black','itaú black','itau black','5881'],
+  'TC Atlas':['atlas','tc atlas'],
+  'TC GNB':['gnb','tc gnb','banco gnb'],
+  'TC Sudameris Plus':['sudameris plus','tc sudameris plus'],
+  'TC Sudameris Clásica':['sudameris clásica','sudameris clasica','tc sudameris clásica','tc sudameris clasica','sudameris']
+};
+
+const SEED_DEFAULT_BUDGETS_BY_NAME = {
+  'Desayuno':100000,'Almuerzo':200000,'Cena':200000,'Gastos varios':300000,
+  'Universidad':888500,'Salida Mica':800000,'Salida amigos':300000,
+  'Cuidado personal':1010000,'Educación':550000,'Transporte':700000,
+  'Suscripción':200000,'Ropa':300000,'Bebidas':100000,'Hogar':200000,
+  'Lujo':0,'Emergencia':0
+};
+
+function buildSeedCategories() {
+  const nowIso = new Date().toISOString();
+  const out = [];
+  SEED_CATEGORIES_EXPENSE_NAMES.forEach(name => out.push({
+    id: 'cat_' + slug(name), name, type: 'expense',
+    keywords: SEED_CAT_KEYWORDS[name] || [],
+    active: true, legacyNames: [], createdAt: nowIso, updatedAt: nowIso
+  }));
+  SEED_CATEGORIES_INCOME_NAMES.forEach(name => out.push({
+    id: 'cat_' + slug(name), name, type: 'income',
+    keywords: SEED_CAT_KEYWORDS[name] || [],
+    active: true, legacyNames: [], createdAt: nowIso, updatedAt: nowIso
+  }));
+  return out;
+}
+function buildSeedPaymentMethods() {
+  const nowIso = new Date().toISOString();
+  return SEED_MEDIOS_NAMES.map(name => ({
+    id: 'pay_' + slug(name), name,
+    keywords: SEED_MEDIO_KEYWORDS[name] || [],
+    active: true, legacyNames: [], createdAt: nowIso, updatedAt: nowIso
+  }));
+}
+
+/* ─── Helpers temporales / validación ────────────────────────────── */
 function isValidDateISO(value) {
   if (typeof value !== 'string') return false;
   const d = new Date(value);
@@ -756,9 +824,7 @@ function isSameMonth(dateStr, refDate) {
 function toLocalDateTimeInputValue(isoStr) {
   const d = new Date(isoStr);
   if (isNaN(d.getTime())) return '';
-  return new Date(d.getTime() - d.getTimezoneOffset() * 60000)
-    .toISOString()
-    .slice(0, 16);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 }
 function fromDateTimeInputValue(inputValue) {
   if (!inputValue) return null;
@@ -769,39 +835,269 @@ function sortEntriesDesc(list) {
   return [...list].sort((a, b) => new Date(b.date) - new Date(a.date));
 }
 
+/* ─── Migración v1 → v2 ───────────────────────────────────────────
+ * Estrategia defensiva (GPT senior advice):
+ *   1. Leer datos crudos.
+ *   2. Construir copia migrada EN MEMORIA.
+ *   3. Validar copia (conteos + sumas + invariantes).
+ *   4. Si valida: backup + escribir a storage + manifest.
+ *   5. Si falla: abortar, dejar datos crudos intactos, loggear.
+ * La migración es IDEMPOTENTE: si detecta schema v2 ya instalado, no
+ * hace nada. */
+
+function getManifest() {
+  return safeGet('rl_manifest', null);
+}
+function setManifest(m) { return safeSet('rl_manifest', m); }
+
+function findByLegacyName(configArr, legacyName) {
+  // Busca primero por legacyNames, luego por name actual (insensitive trim)
+  const needle = (legacyName || '').trim().toLowerCase();
+  if (!needle) return null;
+  for (const item of configArr) {
+    for (const ln of (item.legacyNames || [])) {
+      if (ln.trim().toLowerCase() === needle) return item;
+    }
+    if ((item.name || '').trim().toLowerCase() === needle) return item;
+  }
+  return null;
+}
+
+function migrateEntryV1toV2(e, categories, paymentMethods) {
+  // Si ya tiene categoryId (schema v2), respetarlo
+  if (e.categoryId && typeof e.categoryId === 'string' && e.categoryId.startsWith('cat_')) {
+    return e;
+  }
+  const legacyCatName = e.cat;
+  const catMatch = findByLegacyName(categories, legacyCatName);
+  const categoryId = catMatch ? catMatch.id : (e.type === 'income' ? 'cat_otro_ingreso' : 'cat_gastos_varios');
+
+  let paymentMethodId = null;
+  if (e.type === 'expense') {
+    const legacyMedioName = e.medio;
+    const medioMatch = findByLegacyName(paymentMethods, legacyMedioName);
+    paymentMethodId = medioMatch ? medioMatch.id : 'pay_efectivo';
+  }
+
+  const nowIso = new Date().toISOString();
+  return {
+    id: e.id,
+    type: e.type,
+    amount: e.amount,
+    categoryId,
+    paymentMethodId,
+    note: typeof e.note === 'string' ? e.note : '',
+    raw: typeof e.raw === 'string' ? e.raw : '',
+    date: e.date,
+    createdAt: e.createdAt || e.date || nowIso,
+    updatedAt: e.updatedAt || nowIso
+  };
+}
+
+function migrateBudgetsV1toV2(oldBudgets, categories) {
+  const out = {};
+  if (!oldBudgets || typeof oldBudgets !== 'object') return out;
+  for (const [key, value] of Object.entries(oldBudgets)) {
+    if (typeof key === 'string' && key.startsWith('cat_')) {
+      // Ya es v2
+      out[key] = value;
+    } else {
+      const match = findByLegacyName(categories, key);
+      if (match) out[match.id] = value;
+    }
+  }
+  return out;
+}
+
+function runMigrationIfNeeded() {
+  const manifest = getManifest();
+  const currentVersion = manifest ? manifest.schemaVersion : 1;
+
+  if (currentVersion >= SCHEMA_VERSION) {
+    // Ya está migrado. Asegurar que config exista (por si nunca se cargó).
+    if (!safeGet('rl_categories', null)) safeSet('rl_categories', buildSeedCategories());
+    if (!safeGet('rl_payment_methods', null)) safeSet('rl_payment_methods', buildSeedPaymentMethods());
+    return { migrated: false, reason: 'already_on_current_version' };
+  }
+
+  // Paso 1: leer datos crudos
+  const rawEntries = safeGet('rl_entries', []) || [];
+  const rawBudgets = safeGet('rl_budgets', null) || {};
+
+  // Paso 2: construir copia migrada EN MEMORIA (no tocar storage aún)
+  const seedCategories = buildSeedCategories();
+  const seedPaymentMethods = buildSeedPaymentMethods();
+
+  const migratedEntries = Array.isArray(rawEntries)
+    ? rawEntries.filter(e => e && typeof e === 'object').map(e => migrateEntryV1toV2(e, seedCategories, seedPaymentMethods))
+    : [];
+
+  const migratedBudgets = migrateBudgetsV1toV2(rawBudgets, seedCategories);
+
+  // Si es instalación limpia (sin budgets viejos), aplicar defaults por ID
+  if (Object.keys(rawBudgets).length === 0) {
+    seedCategories.filter(c => c.type === 'expense').forEach(c => {
+      const amt = SEED_DEFAULT_BUDGETS_BY_NAME[c.name];
+      if (typeof amt === 'number') migratedBudgets[c.id] = amt;
+    });
+  }
+
+  // Paso 3: validar
+  const validation = validateMigration(rawEntries, migratedEntries, rawBudgets, migratedBudgets, seedCategories, seedPaymentMethods);
+  if (!validation.ok) {
+    console.error('[RL Gastos] Migración abortada:', validation.errors);
+    safeSet('rl_migration_error', { at: new Date().toISOString(), errors: validation.errors });
+    return { migrated: false, reason: 'validation_failed', errors: validation.errors };
+  }
+
+  // Paso 4: backup + escribir + manifest
+  const backupKey = 'rl_backup_v1_' + new Date().toISOString().replace(/[:.]/g, '-');
+  safeSet(backupKey, {
+    at: new Date().toISOString(),
+    entries: rawEntries,
+    budgets: rawBudgets,
+    alerted: safeGet('rl_alerted', {})
+  });
+
+  safeSet('rl_categories', seedCategories);
+  safeSet('rl_payment_methods', seedPaymentMethods);
+  safeSet('rl_entries', migratedEntries);
+  safeSet('rl_budgets', migratedBudgets);
+  setManifest({
+    schemaVersion: SCHEMA_VERSION,
+    installedAt: (manifest && manifest.installedAt) || new Date().toISOString(),
+    lastMigrationAt: new Date().toISOString(),
+    lastBackupKey: backupKey,
+    dataKeys: {
+      entries: 'rl_entries', categories: 'rl_categories',
+      paymentMethods: 'rl_payment_methods', budgets: 'rl_budgets',
+      alerted: 'rl_alerted', settings: 'rl_settings'
+    }
+  });
+
+  console.info('[RL Gastos] Migración v1→v2 completada. Backup: ' + backupKey);
+  return { migrated: true, backupKey, count: migratedEntries.length };
+}
+
+function validateMigration(rawEntries, migratedEntries, rawBudgets, migratedBudgets, categories, paymentMethods) {
+  const errors = [];
+
+  // Conteo preservado (descontando objetos inválidos del array crudo)
+  const validRawCount = Array.isArray(rawEntries) ? rawEntries.filter(e => e && typeof e === 'object').length : 0;
+  if (migratedEntries.length !== validRawCount) {
+    errors.push('Conteo entries: antes ' + validRawCount + ', después ' + migratedEntries.length);
+  }
+
+  // Suma de amounts preservada (sólo en entries válidos)
+  const sumRaw = Array.isArray(rawEntries)
+    ? rawEntries.filter(e => e && typeof e.amount === 'number').reduce((s, e) => s + e.amount, 0)
+    : 0;
+  const sumMig = migratedEntries.filter(e => typeof e.amount === 'number').reduce((s, e) => s + e.amount, 0);
+  if (sumRaw !== sumMig) {
+    errors.push('Suma amounts: antes ' + sumRaw + ', después ' + sumMig);
+  }
+
+  // Invariantes sobre datos migrados
+  const catIds = new Set(categories.map(c => c.id));
+  const payIds = new Set(paymentMethods.map(p => p.id));
+  for (let i = 0; i < migratedEntries.length; i++) {
+    const e = migratedEntries[i];
+    if (!e.categoryId || !catIds.has(e.categoryId)) { errors.push('Entry[' + i + '] categoryId inválido: ' + e.categoryId); break; }
+    if (e.type === 'expense' && (!e.paymentMethodId || !payIds.has(e.paymentMethodId))) { errors.push('Entry[' + i + '] paymentMethodId inválido: ' + e.paymentMethodId); break; }
+    if (e.type === 'income' && e.paymentMethodId !== null) { errors.push('Entry[' + i + '] income con paymentMethodId no nulo'); break; }
+    if (!Number.isFinite(e.amount) || e.amount <= 0) { errors.push('Entry[' + i + '] amount inválido'); break; }
+    if (!isValidDateISO(e.date)) { errors.push('Entry[' + i + '] date inválida'); break; }
+  }
+
+  // Budgets: keys deben ser categoryIds válidos
+  for (const key of Object.keys(migratedBudgets)) {
+    if (!catIds.has(key)) { errors.push('Budget key inválida: ' + key); break; }
+  }
+
+  return { ok: errors.length === 0, errors };
+}
+
+/* Ejecutar migración ANTES de cualquier otra inicialización */
+runMigrationIfNeeded();
+
+/* ─── Cargar config y estado desde storage (ya migrados) ─────────── */
+let categoriesConfig = safeGet('rl_categories', null) || buildSeedCategories();
+let paymentMethodsConfig = safeGet('rl_payment_methods', null) || buildSeedPaymentMethods();
+
+/* Asegurar que la config tenga al menos los seed (por si algo faltó) */
+function ensureSeedIntegrity() {
+  const seedCats = buildSeedCategories();
+  const seedPays = buildSeedPaymentMethods();
+  const catIds = new Set(categoriesConfig.map(c => c.id));
+  const payIds = new Set(paymentMethodsConfig.map(p => p.id));
+  let dirty = false;
+  for (const s of seedCats) { if (!catIds.has(s.id)) { categoriesConfig.push(s); dirty = true; } }
+  for (const s of seedPays) { if (!payIds.has(s.id)) { paymentMethodsConfig.push(s); dirty = true; } }
+  if (dirty) {
+    safeSet('rl_categories', categoriesConfig);
+    safeSet('rl_payment_methods', paymentMethodsConfig);
+  }
+}
+ensureSeedIntegrity();
+
+/* ─── Helpers de config ──────────────────────────────────────────── */
+function getCategoryById(id) { return categoriesConfig.find(c => c.id === id) || null; }
+function getPaymentMethodById(id) { return paymentMethodsConfig.find(p => p.id === id) || null; }
+function getCategoryName(id) { const c = getCategoryById(id); return c ? c.name : id; }
+function getPaymentMethodName(id) { const p = getPaymentMethodById(id); return p ? p.name : id; }
+function getCategoryIcon(id) {
+  const c = getCategoryById(id);
+  if (!c) return '○';
+  return CAT_ICONS[c.name] || '○';
+}
+function getActiveCategoriesByType(type) {
+  return categoriesConfig.filter(c => c.type === type && c.active);
+}
+function getActivePaymentMethods() {
+  return paymentMethodsConfig.filter(p => p.active);
+}
+
+/* Compat: arrays de IDs para los selectores. */
+function activeCategoryIdsByType(type) { return getActiveCategoriesByType(type).map(c => c.id); }
+function activePaymentMethodIds() { return getActivePaymentMethods().map(p => p.id); }
+
+/* ─── Validación de entry (usa config) ───────────────────────────── */
 function validateEntry(entry) {
   if (!entry || typeof entry !== 'object') return 'Entrada inválida';
   if (!Number.isFinite(entry.amount) || entry.amount <= 0) return 'Monto inválido';
   if (!isValidDateISO(entry.date)) return 'Fecha inválida';
   if (entry.type !== 'expense' && entry.type !== 'income') return 'Tipo inválido';
-  if (entry.type === 'expense' && !CATEGORIES_EXPENSE.includes(entry.cat)) return 'Categoría inválida';
-  if (entry.type === 'income' && !CATEGORIES_INCOME.includes(entry.cat)) return 'Categoría inválida';
-  if (entry.type === 'expense' && !MEDIOS.includes(entry.medio)) return 'Medio de pago inválido';
+  const cat = getCategoryById(entry.categoryId);
+  if (!cat) return 'Categoría inválida';
+  if (cat.type !== entry.type) return 'Categoría no corresponde al tipo';
+  if (entry.type === 'expense') {
+    if (!entry.paymentMethodId) return 'Falta medio de pago';
+    const pm = getPaymentMethodById(entry.paymentMethodId);
+    if (!pm) return 'Medio de pago inválido';
+  }
   return null;
 }
 
-/* Sanidad mínima al cargar entries de localStorage: filtra sólo los que
- * romperían el render (fechas inválidas, tipos rotos, montos no numéricos)
- * y normaliza campos opcionales. NO valida cat/medio estrictamente porque
- * categorías/medios pueden haberse renombrado entre versiones. */
+/* Sanidad al cargar entries: filtra los que romperían el render */
 function isEntryLoadSafe(e) {
   return e &&
     typeof e === 'object' &&
-    typeof e.amount === 'number' &&
-    Number.isFinite(e.amount) &&
+    typeof e.amount === 'number' && Number.isFinite(e.amount) &&
     typeof e.type === 'string' &&
     (e.type === 'expense' || e.type === 'income') &&
-    typeof e.date === 'string' &&
-    isValidDateISO(e.date) &&
-    typeof e.cat === 'string';
+    typeof e.date === 'string' && isValidDateISO(e.date) &&
+    typeof e.categoryId === 'string';
 }
 function normalizeEntry(e) {
+  const nowIso = new Date().toISOString();
   return {
     ...e,
     id: typeof e.id === 'string' && e.id ? e.id : (Date.now().toString() + Math.random().toString(16).slice(2,8)),
-    medio: e.type === 'expense' ? (typeof e.medio === 'string' ? e.medio : 'Efectivo') : null,
+    paymentMethodId: e.type === 'expense' ? (typeof e.paymentMethodId === 'string' ? e.paymentMethodId : 'pay_efectivo') : null,
     note: typeof e.note === 'string' ? e.note : '',
-    raw: typeof e.raw === 'string' ? e.raw : ''
+    raw: typeof e.raw === 'string' ? e.raw : '',
+    createdAt: typeof e.createdAt === 'string' ? e.createdAt : (e.date || nowIso),
+    updatedAt: typeof e.updatedAt === 'string' ? e.updatedAt : nowIso
   };
 }
 
@@ -810,7 +1106,7 @@ let entries = (Array.isArray(_rawEntries) ? _rawEntries : []).filter(isEntryLoad
 if (entries.length !== _rawEntries.length) {
   console.warn('[RL Gastos] Descartados ' + (_rawEntries.length - entries.length) + ' entries inválidos al cargar');
 }
-let budgets = safeGet('rl_budgets', null) || {...DEFAULT_BUDGETS};
+let budgets = safeGet('rl_budgets', null) || {};
 let alertedCats = safeGet('rl_alerted', {});
 let currentType = 'expense';
 let pendingEntry = null;
@@ -893,25 +1189,29 @@ function parseAmount(text) {
 }
 function inferCategory(text, type) {
   const t = text.toLowerCase();
-  const cats = type === 'income' ? CATEGORIES_INCOME : CATEGORIES_EXPENSE;
-  let best = null, bestLen = 0;
-  for (const [cat, keywords] of Object.entries(CAT_KEYWORDS)) {
-    if (!cats.includes(cat)) continue;
-    for (const k of keywords) {
-      if (t.includes(k) && k.length > bestLen) { best = cat; bestLen = k.length; }
+  const activeCats = getActiveCategoriesByType(type);
+  let bestId = null, bestLen = 0;
+  for (const cat of activeCats) {
+    for (const k of (cat.keywords || [])) {
+      if (t.includes(k) && k.length > bestLen) { bestId = cat.id; bestLen = k.length; }
     }
   }
-  return best || (type === 'income' ? 'Otro ingreso' : 'Gastos varios');
+  if (bestId) return bestId;
+  // Fallback: primer categoría activa del tipo (o seed conocido)
+  const fallbackId = type === 'income' ? 'cat_otro_ingreso' : 'cat_gastos_varios';
+  return activeCats.some(c => c.id === fallbackId) ? fallbackId : (activeCats[0] ? activeCats[0].id : fallbackId);
 }
 function inferMedio(text) {
   const t = text.toLowerCase();
-  let best = null, bestLen = 0;
-  for (const [medio, keywords] of Object.entries(MEDIO_KEYWORDS)) {
-    for (const k of keywords) {
-      if (t.includes(k) && k.length > bestLen) { best = medio; bestLen = k.length; }
+  const activePays = getActivePaymentMethods();
+  let bestId = null, bestLen = 0;
+  for (const pm of activePays) {
+    for (const k of (pm.keywords || [])) {
+      if (t.includes(k) && k.length > bestLen) { bestId = pm.id; bestLen = k.length; }
     }
   }
-  return best || 'Efectivo';
+  if (bestId) return bestId;
+  return activePays.some(p => p.id === 'pay_efectivo') ? 'pay_efectivo' : (activePays[0] ? activePays[0].id : 'pay_efectivo');
 }
 
 /* ─── Formatters ──────────────────────────────────────────────────── */
@@ -953,7 +1253,7 @@ function getMonthExpensesByCategory() {
     if (e.type !== 'expense') return;
     const d = new Date(e.date);
     if (d.getMonth() !== now.getMonth() || d.getFullYear() !== now.getFullYear()) return;
-    byCat[e.cat] = (byCat[e.cat] || 0) + e.amount;
+    byCat[e.categoryId] = (byCat[e.categoryId] || 0) + e.amount;
   });
   return byCat;
 }
@@ -971,33 +1271,34 @@ function daysRemainingInMonth() {
   return last - now.getDate();
 }
 
-function checkBudgetAlert(cat, newAmount, entryDate) {
+function checkBudgetAlert(categoryId, newAmount, entryDate) {
   // Guard: sólo disparar alertas si el entry pertenece al mes actual.
   // Entries retroactivos (editados con fecha pasada) no deben generar falsos
   // positivos tipo "¡pasaste el presupuesto!" porque ya está fuera de ventana.
   if (entryDate && !isSameMonth(entryDate)) return;
-  const limit = budgets[cat];
+  const limit = budgets[categoryId];
   if (!limit || limit <= 0) return;
   const byCat = getMonthExpensesByCategory();
-  const previousSpent = (byCat[cat] || 0) - newAmount;
-  const currentSpent = byCat[cat] || 0;
+  const previousSpent = (byCat[categoryId] || 0) - newAmount;
+  const currentSpent = byCat[categoryId] || 0;
   const previousPct = previousSpent / limit;
   const currentPct = currentSpent / limit;
   const monthKey = getMonthKey(new Date());
-  const alertKey = monthKey + ':' + cat;
+  const alertKey = monthKey + ':' + categoryId;
+  const catName = getCategoryName(categoryId);
   if (!alertedCats[alertKey]) alertedCats[alertKey] = {};
   if (previousPct < 1 && currentPct >= 1 && !alertedCats[alertKey].over) {
     alertedCats[alertKey].over = true;
     saveAlerted();
     const over = currentSpent - limit;
-    showToast('⚠ ' + cat + ': pasaste por ' + formatGs(over), 'danger');
+    showToast('⚠ ' + catName + ': pasaste por ' + formatGs(over), 'danger');
     return;
   }
   if (previousPct < 0.7 && currentPct >= 0.7 && currentPct < 1 && !alertedCats[alertKey].warn) {
     alertedCats[alertKey].warn = true;
     saveAlerted();
     const remaining = limit - currentSpent;
-    showToast(cat + ': ' + Math.round(currentPct*100) + '% · quedan ' + formatGs(remaining), 'warning');
+    showToast(catName + ': ' + Math.round(currentPct*100) + '% · quedan ' + formatGs(remaining), 'warning');
     return;
   }
 }
@@ -1079,16 +1380,22 @@ function parseInput() {
     for (const line of lines) {
       const amount = parseAmount(line);
       if (!amount) continue;
-      const cat = inferCategory(line, currentType);
-      const medio = currentType === 'expense' ? inferMedio(line) : null;
-      entries.unshift({ amount, cat, medio, date: new Date().toISOString(), type: currentType, raw: line, note: '', id: Date.now().toString() + Math.random().toString(16).slice(2,8) });
+      const categoryId = inferCategory(line, currentType);
+      const paymentMethodId = currentType === 'expense' ? inferMedio(line) : null;
+      const nowIso = new Date().toISOString();
+      entries.unshift({
+        amount, categoryId, paymentMethodId,
+        date: nowIso, createdAt: nowIso, updatedAt: nowIso,
+        type: currentType, raw: line, note: '',
+        id: Date.now().toString() + Math.random().toString(16).slice(2,8)
+      });
       count++; total += amount;
-      if (currentType === 'expense') affectedCats[cat] = (affectedCats[cat] || 0) + amount;
+      if (currentType === 'expense') affectedCats[categoryId] = (affectedCats[categoryId] || 0) + amount;
     }
     if (count === 0) { showToast('No encontré montos'); return; }
     save();
     const nowIso = new Date().toISOString();
-    Object.entries(affectedCats).forEach(([cat, amt]) => checkBudgetAlert(cat, amt, nowIso));
+    Object.entries(affectedCats).forEach(([cid, amt]) => checkBudgetAlert(cid, amt, nowIso));
     const inp = document.getElementById('mainInput');
     inp.value = ''; inp.style.height = '110px';
     showToast(count + ' registros · ' + formatGs(total));
@@ -1096,21 +1403,26 @@ function parseInput() {
   }
   const amount = parseAmount(text);
   if (!amount) { showToast('No encontré el monto'); return; }
-  const cat = inferCategory(text, currentType);
-  const medio = currentType === 'expense' ? inferMedio(text) : null;
+  const categoryId = inferCategory(text, currentType);
+  const paymentMethodId = currentType === 'expense' ? inferMedio(text) : null;
   const now = new Date().toISOString();
-  pendingEntry = { amount, cat, medio, date: now, type: currentType, raw: text, note: '' };
-  selectedCat = cat; selectedMedio = medio;
+  pendingEntry = { amount, categoryId, paymentMethodId, date: now, type: currentType, raw: text, note: '' };
+  selectedCat = categoryId; selectedMedio = paymentMethodId;
   document.getElementById('confAmount').textContent = formatGs(amount);
   document.getElementById('confAmount').className = 'confirm-amount-display' + (currentType === 'income' ? ' income-val' : '');
   document.getElementById('confDate').value = toLocalDateTimeInputValue(now);
   document.getElementById('noteInput').value = '';
-  const cats = currentType === 'income' ? CATEGORIES_INCOME : CATEGORIES_EXPENSE;
-  document.getElementById('catSelector').innerHTML = cats.map(c => '<button class="selector-chip' + (c === cat ? ' selected' : '') + '" onclick="selectCat(this,\'' + c + '\')">' + c + '</button>').join('');
+  const activeCats = getActiveCategoriesByType(currentType);
+  document.getElementById('catSelector').innerHTML = activeCats.map(c =>
+    '<button class="selector-chip' + (c.id === categoryId ? ' selected' : '') + '" onclick="selectCat(this,\'' + c.id + '\')">' + c.name + '</button>'
+  ).join('');
   const medioSection = document.getElementById('medioSection');
   if (currentType === 'expense') {
     medioSection.style.display = '';
-    document.getElementById('medioSelector').innerHTML = MEDIOS.map(m => '<button class="selector-chip' + (m === medio ? ' selected' : '') + '" onclick="selectMedio(this,\'' + m + '\')">' + m + '</button>').join('');
+    const activePays = getActivePaymentMethods();
+    document.getElementById('medioSelector').innerHTML = activePays.map(p =>
+      '<button class="selector-chip' + (p.id === paymentMethodId ? ' selected' : '') + '" onclick="selectMedio(this,\'' + p.id + '\')">' + p.name + '</button>'
+    ).join('');
   } else {
     medioSection.style.display = 'none';
   }
@@ -1118,25 +1430,28 @@ function parseInput() {
   document.getElementById('confirmCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-function selectCat(el, cat) { selectedCat = cat; el.parentElement.querySelectorAll('.selector-chip').forEach(c => c.classList.remove('selected')); el.classList.add('selected'); }
-function selectMedio(el, medio) { selectedMedio = medio; el.parentElement.querySelectorAll('.selector-chip').forEach(c => c.classList.remove('selected')); el.classList.add('selected'); }
+function selectCat(el, categoryId) { selectedCat = categoryId; el.parentElement.querySelectorAll('.selector-chip').forEach(c => c.classList.remove('selected')); el.classList.add('selected'); }
+function selectMedio(el, paymentMethodId) { selectedMedio = paymentMethodId; el.parentElement.querySelectorAll('.selector-chip').forEach(c => c.classList.remove('selected')); el.classList.add('selected'); }
 
 function saveEntry() {
   if (!pendingEntry) return;
   const dateIso = fromDateTimeInputValue(document.getElementById('confDate').value) || pendingEntry.date;
+  const nowIso = new Date().toISOString();
   const finalEntry = {
     ...pendingEntry,
-    cat: selectedCat,
-    medio: selectedMedio,
+    categoryId: selectedCat,
+    paymentMethodId: selectedMedio,
     note: document.getElementById('noteInput').value.trim(),
     date: dateIso,
+    createdAt: nowIso,
+    updatedAt: nowIso,
     id: Date.now().toString() + Math.random().toString(16).slice(2,8)
   };
   const err = validateEntry(finalEntry);
   if (err) { showToast(err, 'danger'); return; }
   entries.unshift(finalEntry);
   save();
-  if (finalEntry.type === 'expense') checkBudgetAlert(finalEntry.cat, finalEntry.amount, finalEntry.date);
+  if (finalEntry.type === 'expense') checkBudgetAlert(finalEntry.categoryId, finalEntry.amount, finalEntry.date);
   cancelConfirm();
   const inp = document.getElementById('mainInput');
   inp.value = ''; inp.style.height = '110px';
@@ -1151,19 +1466,31 @@ function openEditModal(id) {
   const entry = entries.find(e => e.id === id);
   if (!entry) return;
   editingId = id;
-  editingSelectedCat = entry.cat;
-  editingSelectedMedio = entry.medio;
+  editingSelectedCat = entry.categoryId;
+  editingSelectedMedio = entry.paymentMethodId;
   document.getElementById('editAmountDisplay').textContent = formatGs(entry.amount);
   document.getElementById('editAmountDisplay').className = 'confirm-amount-display' + (entry.type === 'income' ? ' income-val' : '');
   document.getElementById('editAmountInput').value = entry.amount;
   document.getElementById('editNoteInput').value = entry.note || '';
   document.getElementById('editDateDisplay').value = toLocalDateTimeInputValue(entry.date);
-  const cats = entry.type === 'income' ? CATEGORIES_INCOME : CATEGORIES_EXPENSE;
-  document.getElementById('editCatSelector').innerHTML = cats.map(c => '<button class="selector-chip' + (c === entry.cat ? ' selected' : '') + '" onclick="selectEditCat(this,\'' + c + '\')">' + c + '</button>').join('');
+  // Para editar, incluir también la categoría actual aunque esté archivada
+  const activeOfType = getActiveCategoriesByType(entry.type);
+  const currentCat = getCategoryById(entry.categoryId);
+  const catsToShow = currentCat && !activeOfType.some(c => c.id === currentCat.id)
+    ? [...activeOfType, currentCat] : activeOfType;
+  document.getElementById('editCatSelector').innerHTML = catsToShow.map(c =>
+    '<button class="selector-chip' + (c.id === entry.categoryId ? ' selected' : '') + '" onclick="selectEditCat(this,\'' + c.id + '\')">' + c.name + (c.active ? '' : ' (archivada)') + '</button>'
+  ).join('');
   const editMedioSection = document.getElementById('editMedioSection');
   if (entry.type === 'expense') {
     editMedioSection.style.display = '';
-    document.getElementById('editMedioSelector').innerHTML = MEDIOS.map(m => '<button class="selector-chip' + (m === entry.medio ? ' selected' : '') + '" onclick="selectEditMedio(this,\'' + m + '\')">' + m + '</button>').join('');
+    const activePays = getActivePaymentMethods();
+    const currentPm = getPaymentMethodById(entry.paymentMethodId);
+    const paysToShow = currentPm && !activePays.some(p => p.id === currentPm.id)
+      ? [...activePays, currentPm] : activePays;
+    document.getElementById('editMedioSelector').innerHTML = paysToShow.map(p =>
+      '<button class="selector-chip' + (p.id === entry.paymentMethodId ? ' selected' : '') + '" onclick="selectEditMedio(this,\'' + p.id + '\')">' + p.name + (p.active ? '' : ' (archivado)') + '</button>'
+    ).join('');
   } else {
     editMedioSection.style.display = 'none';
   }
@@ -1177,13 +1504,13 @@ function closeEditModal() {
   editingId = null;
 }
 
-function selectEditCat(el, cat) {
-  editingSelectedCat = cat;
+function selectEditCat(el, categoryId) {
+  editingSelectedCat = categoryId;
   el.parentElement.querySelectorAll('.selector-chip').forEach(c => c.classList.remove('selected'));
   el.classList.add('selected');
 }
-function selectEditMedio(el, medio) {
-  editingSelectedMedio = medio;
+function selectEditMedio(el, paymentMethodId) {
+  editingSelectedMedio = paymentMethodId;
   el.parentElement.querySelectorAll('.selector-chip').forEach(c => c.classList.remove('selected'));
   el.classList.add('selected');
 }
@@ -1198,10 +1525,11 @@ function saveEditEntry() {
   const updated = {
     ...entries[idx],
     amount: newAmount,
-    cat: editingSelectedCat,
-    medio: entries[idx].type === 'expense' ? editingSelectedMedio : null,
+    categoryId: editingSelectedCat,
+    paymentMethodId: entries[idx].type === 'expense' ? editingSelectedMedio : null,
     note: newNote,
-    date: editedIso
+    date: editedIso,
+    updatedAt: new Date().toISOString()
   };
   const err = validateEntry(updated);
   if (err) { showToast(err, 'danger'); return; }
@@ -1349,22 +1677,23 @@ function renderResumen() {
 
   /* Category aggregation with severity sort */
   const byCat = {};
-  expenses.forEach(e => { byCat[e.cat] = (byCat[e.cat] || 0) + e.amount; });
-  let catEntries = Object.entries(byCat).map(([cat, amt]) => {
-    const limit = budgets[cat] || 0;
+  expenses.forEach(e => { byCat[e.categoryId] = (byCat[e.categoryId] || 0) + e.amount; });
+  let catEntries = Object.entries(byCat).map(([catId, amt]) => {
+    const limit = budgets[catId] || 0;
     const status = monthMode && limit > 0 ? budgetStatus(amt, limit) : null;
     const pctOfBudget = monthMode && limit > 0 ? Math.round((amt / limit) * 100) : null;
     const sharePct = totalExp > 0 ? Math.round((amt / totalExp) * 100) : 0;
     const severity = monthMode && limit > 0 ? (getStatusWeight(status) * 1e9 + (amt / limit) * 1e6 + amt) : amt;
-    return { cat, amt, limit, status, pctOfBudget, sharePct, severity };
+    const catObj = getCategoryById(catId);
+    return { catId, catName: catObj ? catObj.name : catId, amt, limit, status, pctOfBudget, sharePct, severity };
   }).sort((a, b) => b.severity - a.severity);
 
   const visibleCats = showAllSummaryCats ? catEntries : catEntries.slice(0, 3);
   const maxCatAmount = Math.max(...catEntries.map(c => c.amt), 1);
 
   const byMedio = {};
-  expenses.forEach(e => { if (e.medio) byMedio[e.medio] = (byMedio[e.medio] || 0) + e.amount; });
-  const medioEntries = Object.entries(byMedio).sort((a,b) => b[1]-a[1]);
+  expenses.forEach(e => { if (e.paymentMethodId) byMedio[e.paymentMethodId] = (byMedio[e.paymentMethodId] || 0) + e.amount; });
+  const medioEntries = Object.entries(byMedio).map(([pmId, amt]) => [getPaymentMethodName(pmId), amt]).sort((a,b) => b[1]-a[1]);
 
   /* Budget hero (solo en vista mes) */
   let budgetHero = '';
@@ -1528,12 +1857,12 @@ function renderResumen() {
           visibleCats.map((item, idx) => {
             const barWidth = monthMode && item.limit > 0 ? Math.min(100, item.pctOfBudget) : Math.max(10, Math.round((item.amt / maxCatAmount) * 100));
             const status = item.status || 'safe';
-            const catEscaped = item.cat.replace(/'/g, "\\'");
-            return '<div class="rank-item-hybrid" onclick="goToCategoryHistory(\'' + catEscaped + '\')">' +
+            const catIdEscaped = item.catId.replace(/'/g, "\\'");
+            return '<div class="rank-item-hybrid" onclick="goToCategoryHistory(\'' + catIdEscaped + '\')">' +
               '<div class="rank-badge-hybrid ' + status + '">' + (idx + 1) + '</div>' +
               '<div class="rank-main-hybrid">' +
                 '<div class="rank-name-row-hybrid">' +
-                  '<span class="rank-name-hybrid">' + (CAT_ICONS[item.cat] || '○') + ' ' + item.cat + '</span>' +
+                  '<span class="rank-name-hybrid">' + (CAT_ICONS[item.catName] || '○') + ' ' + item.catName + '</span>' +
                   '<span>' +
                     '<span class="rank-amount-hybrid">' + formatGs(item.amt) + (monthMode && item.limit > 0 ? ' <span class="limit">/ ' + formatGs(item.limit) + '</span>' : '') + '</span>' +
                     '<span class="rank-pct-hybrid ' + (monthMode && item.limit > 0 ? status : 'safe') + '">' + (monthMode && item.limit > 0 ? item.pctOfBudget + '%' : item.sharePct + '%') + '</span>' +
@@ -1586,10 +1915,15 @@ function clearSearch() {
 }
 
 function buildFilterChips() {
-  const cats = new Set(entries.map(e => e.cat));
-  const allCats = ['todo', ...CATEGORIES_EXPENSE, ...CATEGORIES_INCOME].filter(c => c === 'todo' || cats.has(c));
-  const shortLabels = {'todo':'Todo','Gastos varios':'Varios','Cuidado personal':'Personal','Salida Mica':'Mica','Salida amigos':'Amigos','Otro ingreso':'Otro'};
-  document.getElementById('filterRow').innerHTML = allCats.map(c => '<button class="filter-chip' + (c === currentFilter ? ' active' : '') + '" onclick="setFilter(\'' + c + '\', this)">' + (shortLabels[c] || c) + '</button>').join('');
+  const usedCatIds = new Set(entries.map(e => e.categoryId));
+  // Orden: 'todo' + todas las categorías que tienen al menos un entry
+  const activeThenUsed = categoriesConfig.filter(c => usedCatIds.has(c.id));
+  const allFilters = ['todo', ...activeThenUsed.map(c => c.id)];
+  const shortLabels = {'Gastos varios':'Varios','Cuidado personal':'Personal','Salida Mica':'Mica','Salida amigos':'Amigos','Otro ingreso':'Otro'};
+  document.getElementById('filterRow').innerHTML = allFilters.map(f => {
+    const label = f === 'todo' ? 'Todo' : (shortLabels[getCategoryName(f)] || getCategoryName(f));
+    return '<button class="filter-chip' + (f === currentFilter ? ' active' : '') + '" onclick="setFilter(\'' + f + '\', this)">' + label + '</button>';
+  }).join('');
 }
 
 function setFilter(filter, btn) {
@@ -1608,10 +1942,12 @@ function renderHistorial() {
     if (currentSearch) si.classList.add('has-value'); else si.classList.remove('has-value');
   }
 
-  let filtered = currentFilter === 'todo' ? [...entries] : entries.filter(e => e.cat === currentFilter);
+  let filtered = currentFilter === 'todo' ? [...entries] : entries.filter(e => e.categoryId === currentFilter);
   if (currentSearch) {
     filtered = filtered.filter(e => {
-      const hay = (e.cat + ' ' + (e.note || '') + ' ' + (e.medio || '') + ' ' + (e.raw || '') + ' ' + e.amount).toLowerCase();
+      const catName = getCategoryName(e.categoryId);
+      const pmName = e.paymentMethodId ? getPaymentMethodName(e.paymentMethodId) : '';
+      const hay = (catName + ' ' + (e.note || '') + ' ' + pmName + ' ' + (e.raw || '') + ' ' + e.amount).toLowerCase();
       return hay.includes(currentSearch);
     });
   }
@@ -1651,15 +1987,17 @@ function renderHistorial() {
     html += '<div class="entry-group-date">' + formatDateGroup(items[0].date) + (groupTotal ? ' · <strong>' + formatGs(groupTotal) + '</strong>' : '') + '</div>';
     html += '<div class="entries-card">';
     for (const e of items) {
-      const icon = CAT_ICONS[e.cat] || '○';
+      const catName = getCategoryName(e.categoryId);
+      const pmName = e.paymentMethodId ? getPaymentMethodName(e.paymentMethodId) : '';
+      const icon = CAT_ICONS[catName] || '○';
       html +=
         '<div class="entry-item" data-id="' + e.id + '">' +
           '<div class="entry-content">' +
             '<div class="entry-icon ' + (e.type === 'income' ? 'income-icon' : 'expense-icon') + '">' + icon + '</div>' +
             '<div class="entry-left">' +
-              '<div class="entry-cat">' + e.cat + '</div>' +
+              '<div class="entry-cat">' + catName + '</div>' +
               (e.note ? '<div class="entry-note">' + e.note + '</div>' : '') +
-              '<div class="entry-meta">' + (e.medio != null ? e.medio : (e.type === 'income' ? 'Ingreso' : '')) + '</div>' +
+              '<div class="entry-meta">' + (pmName || (e.type === 'income' ? 'Ingreso' : '')) + '</div>' +
             '</div>' +
             '<div class="entry-right">' +
               '<div class="entry-amount ' + e.type + '">' + (e.type === 'income' ? '+' : '') + formatGs(e.amount) + '</div>' +
@@ -1779,10 +2117,11 @@ function renderSettings() {
 
 function renderBudgetEditor() {
   const editor = document.getElementById('budgetEditor');
-  editor.innerHTML = CATEGORIES_EXPENSE.map(cat =>
+  const expenseCats = getActiveCategoriesByType('expense');
+  editor.innerHTML = expenseCats.map(cat =>
     '<div class="budget-editor-row">' +
-      '<span class="budget-editor-name">' + (CAT_ICONS[cat] || '○') + ' ' + cat + '</span>' +
-      '<input type="number" class="budget-editor-input" data-cat="' + cat + '" value="' + (budgets[cat] || 0) + '" min="0" step="10000" oninput="updateBudgetTotal()">' +
+      '<span class="budget-editor-name">' + (CAT_ICONS[cat.name] || '○') + ' ' + cat.name + '</span>' +
+      '<input type="number" class="budget-editor-input" data-cat-id="' + cat.id + '" value="' + (budgets[cat.id] || 0) + '" min="0" step="10000" oninput="updateBudgetTotal()">' +
     '</div>'
   ).join('');
   updateBudgetTotal();
@@ -1798,7 +2137,7 @@ function updateBudgetTotal() {
 function saveBudgets() {
   const inputs = document.querySelectorAll('.budget-editor-input');
   const newBudgets = {};
-  inputs.forEach(i => { newBudgets[i.dataset.cat] = parseInt(i.value) || 0; });
+  inputs.forEach(i => { newBudgets[i.dataset.catId] = parseInt(i.value) || 0; });
   budgets = newBudgets;
   safeSet('rl_budgets', budgets);
   alertedCats = {};
@@ -1819,7 +2158,7 @@ function exportCSV() {
   if (entries.length === 0) { showToast('Sin datos para exportar'); return; }
   const header = 'Fecha,Tipo,Categoría,Monto,Medio,Nota\n';
   const rows = entries.map(e =>
-    [e.date, e.type, e.cat, e.amount, e.medio || '', e.note || ''].map(csvEscape).join(',')
+    [e.date, e.type, getCategoryName(e.categoryId), e.amount, e.paymentMethodId ? getPaymentMethodName(e.paymentMethodId) : '', e.note || ''].map(csvEscape).join(',')
   ).join('\n');
   const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -1848,20 +2187,20 @@ function renderPrintableExtracto() {
 
   // Por categoría
   const byCat = {};
-  monthExpenses.forEach(e => { byCat[e.cat] = (byCat[e.cat] || 0) + e.amount; });
-  const catRows = Object.entries(byCat).sort((a,b) => b[1] - a[1]).map(([cat, amt]) => {
-    const limit = budgets[cat] || 0;
+  monthExpenses.forEach(e => { byCat[e.categoryId] = (byCat[e.categoryId] || 0) + e.amount; });
+  const catRows = Object.entries(byCat).sort((a,b) => b[1] - a[1]).map(([catId, amt]) => {
+    const limit = budgets[catId] || 0;
     const sharePct = totalExp > 0 ? Math.round((amt/totalExp)*100) : 0;
     const limitPct = limit > 0 ? Math.round((amt/limit)*100) + '%' : '—';
-    return '<tr><td>' + cat + '</td><td class="right">' + formatGs(amt) + '</td><td class="right">' + sharePct + '%</td><td class="right">' + (limit > 0 ? formatGs(limit) : '—') + '</td><td class="right">' + limitPct + '</td></tr>';
+    return '<tr><td>' + getCategoryName(catId) + '</td><td class="right">' + formatGs(amt) + '</td><td class="right">' + sharePct + '%</td><td class="right">' + (limit > 0 ? formatGs(limit) : '—') + '</td><td class="right">' + limitPct + '</td></tr>';
   }).join('');
 
   // Por medio
   const byMedio = {};
-  monthExpenses.forEach(e => { if (e.medio) byMedio[e.medio] = (byMedio[e.medio] || 0) + e.amount; });
-  const medioRows = Object.entries(byMedio).sort((a,b) => b[1] - a[1]).map(([medio, amt]) => {
+  monthExpenses.forEach(e => { if (e.paymentMethodId) byMedio[e.paymentMethodId] = (byMedio[e.paymentMethodId] || 0) + e.amount; });
+  const medioRows = Object.entries(byMedio).sort((a,b) => b[1] - a[1]).map(([pmId, amt]) => {
     const pct = totalExp > 0 ? Math.round((amt/totalExp)*100) : 0;
-    return '<tr><td>' + medio + '</td><td class="right">' + formatGs(amt) + '</td><td class="right">' + pct + '%</td></tr>';
+    return '<tr><td>' + getPaymentMethodName(pmId) + '</td><td class="right">' + formatGs(amt) + '</td><td class="right">' + pct + '%</td></tr>';
   }).join('');
 
   // Detalle por día (descendente)
@@ -1882,10 +2221,12 @@ function renderPrintableExtracto() {
     for (const e of items) {
       const timeStr = new Date(e.date).toLocaleTimeString('es-PY', {hour:'2-digit', minute:'2-digit'});
       const sign = e.type === 'income' ? '+' : '';
+      const catName = getCategoryName(e.categoryId);
+      const pmName = e.paymentMethodId ? getPaymentMethodName(e.paymentMethodId) : '';
       detailHtml += '<tr>' +
         '<td style="width:42px">' + timeStr + '</td>' +
-        '<td>' + e.cat + (e.note ? ' — ' + e.note : '') + '</td>' +
-        '<td style="color:#555">' + (e.medio || (e.type === 'income' ? 'Ingreso' : '')) + '</td>' +
+        '<td>' + catName + (e.note ? ' — ' + e.note : '') + '</td>' +
+        '<td style="color:#555">' + (pmName || (e.type === 'income' ? 'Ingreso' : '')) + '</td>' +
         '<td class="right">' + sign + formatGs(e.amount) + '</td>' +
       '</tr>';
     }
@@ -1940,15 +2281,31 @@ function printExtracto() {
 
 /* ─── Clear All (FIX: limpia TODO el estado) ────────────────────── */
 function clearAll() {
-  if (!confirm('¿Borrar TODOS los datos? Incluye registros, presupuestos y alertas. No se puede deshacer.')) return;
-  if (!confirm('¿Estás seguro? Se perderán todos los registros y presupuestos personalizados.')) return;
+  if (!confirm('¿Borrar TODOS los datos? Incluye registros, presupuestos, categorías personalizadas y alertas. No se puede deshacer.')) return;
+  if (!confirm('¿Estás seguro? Se perderán todos los registros, presupuestos y cualquier personalización.')) return;
   entries = [];
-  budgets = {...DEFAULT_BUDGETS};
+  // Reset a seed por default (budgets por ID, config fresca)
+  const freshCats = buildSeedCategories();
+  const freshPays = buildSeedPaymentMethods();
+  const freshBudgets = {};
+  freshCats.filter(c => c.type === 'expense').forEach(c => {
+    const amt = SEED_DEFAULT_BUDGETS_BY_NAME[c.name];
+    if (typeof amt === 'number') freshBudgets[c.id] = amt;
+  });
+  categoriesConfig = freshCats;
+  paymentMethodsConfig = freshPays;
+  budgets = freshBudgets;
   alertedCats = {};
   try {
     localStorage.removeItem('rl_entries');
     localStorage.removeItem('rl_budgets');
     localStorage.removeItem('rl_alerted');
+    localStorage.removeItem('rl_categories');
+    localStorage.removeItem('rl_payment_methods');
+    // Mantener rl_manifest (ya está en v2) y los backups
+    safeSet('rl_categories', freshCats);
+    safeSet('rl_payment_methods', freshPays);
+    safeSet('rl_budgets', freshBudgets);
   } catch (e) { console.warn('Error clearing storage', e); }
   updateHeader();
   renderQuickStats();
@@ -1958,33 +2315,55 @@ function clearAll() {
 }
 
 /* ─── Init ───────────────────────────────────────────────────────── */
-updateMonthBadge();
-updateHeader();
-renderQuickStats();
-renderStreak();
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); });
+try {
+  updateMonthBadge();
+  updateHeader();
+  renderQuickStats();
+  renderStreak();
+} catch (initErr) {
+  console.error('[RL Gastos] Init error:', initErr);
+  // Mostrar error visible en pantalla en lugar de dejar la app en blanco
+  const errBanner = document.createElement('div');
+  errBanner.style.cssText = 'position:fixed;top:0;left:0;right:0;padding:16px;background:#FF3B30;color:#fff;font-family:system-ui;font-size:13px;z-index:9999;';
+  errBanner.innerHTML = '<strong>Error al iniciar:</strong> ' + (initErr.message || initErr) +
+    '<br><small>Si viste la app antes, es un caché viejo. Cerrá esta pestaña, buscá la app en Ajustes de iPhone → Safari → Borrar historial, y volvé a abrirla. Tus datos no se pierden.</small>';
+  document.body.appendChild(errBanner);
 }
+
+/* Service Worker: registrar con update agresivo para evitar caché viejo
+ * después de deploys. Si hay un SW viejo, se fuerza la actualización. */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').then(reg => {
+      // Forzar update check en cada carga
+      if (reg.update) reg.update();
+    }).catch(() => {});
+  });
+}
+
 const mainInput = document.getElementById('mainInput');
-mainInput.addEventListener('input', function() {
-  this.style.height = 'auto';
-  this.style.height = Math.max(110, this.scrollHeight) + 'px';
-});
-/* Cmd/Ctrl+Enter to submit */
-mainInput.addEventListener('keydown', function(e) {
-  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-    e.preventDefault();
-    parseInput();
-  }
-});
+if (mainInput) {
+  mainInput.addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = Math.max(110, this.scrollHeight) + 'px';
+  });
+  /* Cmd/Ctrl+Enter to submit */
+  mainInput.addEventListener('keydown', function(e) {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      parseInput();
+    }
+  });
+}
 /* Escape closes modals */
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
-    if (document.getElementById('editOverlay').classList.contains('visible')) closeEditModal();
+    const ov = document.getElementById('editOverlay');
+    if (ov && ov.classList.contains('visible')) closeEditModal();
   }
 });
-requestAnimationFrame(() => updatePeriodSlider());
-window.addEventListener('resize', () => updatePeriodSlider());
+requestAnimationFrame(() => { try { updatePeriodSlider(); } catch(e) {} });
+window.addEventListener('resize', () => { try { updatePeriodSlider(); } catch(e) {} });
 </script>
 
 </body>
