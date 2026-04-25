@@ -279,8 +279,32 @@ font-variant-numeric: tabular-nums;
 /* Edit modal overlay */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.35); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); display: none; z-index: 300; opacity: 0; transition: opacity var(--t-mid) var(--ease); }
 .modal-overlay.visible { display: block; opacity: 1; }
-.modal-panel { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(420px, calc(100vw - 32px)); max-width: calc(100vw - 32px); max-height: 86vh; overflow-y: auto; overflow-x: hidden; background: var(--surface); border-radius: 22px; box-shadow: 0 24px 60px rgba(0,0,0,0.28); z-index: 301; display: none; }
-.modal-overlay.visible ~ .modal-panel, .modal-panel.visible { display: block; animation: cardReveal 320ms var(--spring) forwards; }
+/* Modal-panel anclado con left/right en mobile (sin transform-X) para
+ * garantizar que NUNCA se salga de la pantalla, no importa el contenido.
+ * En desktop (>=440px viewport) sí centra clásicamente con max-width 420. */
+.modal-panel {
+  position: fixed;
+  top: 50%;
+  left: 16px;
+  right: 16px;
+  margin: 0 auto;
+  max-width: 420px;
+  transform: translateY(-50%);
+  max-height: 86vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--surface);
+  border-radius: 22px;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.28);
+  z-index: 301;
+  display: none;
+  box-sizing: border-box;
+}
+.modal-overlay.visible ~ .modal-panel, .modal-panel.visible { display: block; animation: modalReveal 320ms var(--spring) forwards; }
+@keyframes modalReveal {
+  from { opacity: 0; transform: translateY(calc(-50% + 10px)) scale(0.98); }
+  to { opacity: 1; transform: translateY(-50%) scale(1); }
+}
 /* FIX: si el header del modal contiene un monto muy largo (ej. ₲60B), el
  * span del monto puede empujar el modal fuera de la pantalla. Forzar
  * shrink del label y truncado del monto con ellipsis si es necesario. */
