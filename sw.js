@@ -1,10 +1,10 @@
-const CACHE_NAME = 'rl-gastos-v1';
+const CACHE_NAME = 'rl-gastos-v2';
 
 const PRECACHE = [
   '/rl-gastos.html',
   '/manifest.json',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
+  '/icon-192.png',
+  '/icon-512.png',
 ];
 
 // Install: precache core assets

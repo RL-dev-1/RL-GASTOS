@@ -312,6 +312,32 @@ font-variant-numeric: tabular-nums;
 .modal-panel .confirm-label { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .modal-panel .confirm-amount-display { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60%; }
 
+/* ── Mica modal: banner de presupuesto + grid de subcategorías ── */
+.mica-banner { padding: 14px 16px; border-radius: 14px; margin: 4px 0 14px; border: 0.5px solid var(--line); }
+.mica-banner.ok    { background: rgba(34,197,94,0.10);  border-color: rgba(34,197,94,0.35);  color: #166534; }
+.mica-banner.warn  { background: rgba(234,179,8,0.12);  border-color: rgba(234,179,8,0.40);  color: #854d0e; }
+.mica-banner.over  { background: rgba(239,68,68,0.12);  border-color: rgba(239,68,68,0.45);  color: #991b1b; }
+:root[data-theme="dark"] .mica-banner.ok   { color: #86efac; }
+:root[data-theme="dark"] .mica-banner.warn { color: #fde68a; }
+:root[data-theme="dark"] .mica-banner.over { color: #fca5a5; }
+.mica-banner-row1 { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.mica-banner-title { font-size: 13px; font-weight: 600; opacity: 0.9; letter-spacing: -0.01em; }
+.mica-banner-amount { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.mica-progress-track { height: 6px; background: rgba(0,0,0,0.08); border-radius: 999px; overflow: hidden; }
+:root[data-theme="dark"] .mica-progress-track { background: rgba(255,255,255,0.10); }
+.mica-progress-fill { height: 100%; transition: width 360ms var(--spring); border-radius: 999px; }
+.mica-banner.ok   .mica-progress-fill { background: #22c55e; }
+.mica-banner.warn .mica-progress-fill { background: #eab308; }
+.mica-banner.over .mica-progress-fill { background: #ef4444; }
+.mica-banner-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; opacity: 0.85; }
+.mica-banner-foot strong { font-weight: 600; }
+.mica-subcat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 4px; }
+.mica-subcat-btn { display: flex; align-items: center; gap: 10px; padding: 14px 14px; background: var(--surface-2); border: 0.5px solid var(--line); border-radius: 14px; color: var(--t1); font-size: 15px; font-weight: 500; letter-spacing: -0.01em; cursor: pointer; transition: all var(--t-fast); -webkit-tap-highlight-color: transparent; text-align: left; font-family: inherit; }
+.mica-subcat-btn:active { background: var(--surface-3); transform: scale(0.97); }
+.mica-subcat-btn .mica-subcat-emoji { font-size: 20px; line-height: 1; flex-shrink: 0; }
+.mica-subcat-btn.selected { background: var(--blue-soft); border-color: var(--blue); color: var(--blue); }
+.mica-subcat-btn.full { grid-column: 1 / -1; justify-content: flex-start; }
+
 /* Period tabs — pill style */
 .period-tabs {
 display: flex; margin: 18px 0 18px;
@@ -955,6 +981,23 @@ body { max-width: 480px; margin: 0 auto; border-left: 0.5px solid var(--line); b
   </div>
 </div>
 
+<!-- Mica subcategory modal -->
+<div class="modal-overlay" id="micaOverlay" onclick="closeMicaModal()"></div>
+<div class="modal-panel" id="micaPanel">
+  <div class="confirm-header">
+    <span class="confirm-label">Salida Mica ♡</span>
+    <span class="confirm-amount-display" id="micaHeaderAmount" style="font-size:15px;">—</span>
+  </div>
+  <div class="confirm-body">
+    <div id="micaBannerWrap"></div>
+    <div class="confirm-section-label" style="margin-bottom:8px;">¿En qué fue el gasto?</div>
+    <div class="mica-subcat-grid" id="micaSubcatGrid"></div>
+  </div>
+  <div class="confirm-actions">
+    <button class="btn-cancel" onclick="closeMicaModal()">Cancelar</button>
+  </div>
+</div>
+
 <script>
 /* ═══════════════════════════════════════════════════════════════════════════
    RL GASTOS — Final version
@@ -1045,6 +1088,17 @@ const SEED_CATEGORIES_INCOME_NAMES = ['Interés','Salario','Viático','Otro ingr
 const SEED_MEDIOS_NAMES = ['Efectivo','Débito Itaú','TC Itaú Normal','TC Itaú Black','TC Atlas','TC GNB','TC Sudameris Plus','TC Sudameris Clásica'];
 
 const CAT_ICONS = {'Gastos varios':'○','Universidad':'◇','Salida Mica':'♡','Salida amigos':'△','Desayuno':'◑','Almuerzo':'●','Cena':'◐','Cuidado personal':'◈','Educación':'□','Lujo':'✦','Ropa':'▪','Bebidas':'◉','Emergencia':'⚡','Transporte':'→','Hogar':'⌂','Suscripción':'↻','Interés':'↗','Salario':'$','Viático':'↗','Otro ingreso':'+'};
+
+// Mica: id de la categoría y subcategorías (almacenadas en entry.subcategory)
+const MICA_CAT_ID = 'cat_salida_mica';
+const MICA_SUBCATS = [
+  { id: 'cena',     label: 'Cena',          emoji: '🍽️' },
+  { id: 'hotel',    label: 'Hotel',         emoji: '🏨' },
+  { id: 'almuerzo', label: 'Almuerzo',      emoji: '🥪' },
+  { id: 'snacks',   label: 'Snacks',        emoji: '🍿' },
+  { id: 'nafta',    label: 'Nafta salidas', emoji: '⛽' }
+];
+const MICA_SUBCAT_LABEL = MICA_SUBCATS.reduce((m, s) => (m[s.id] = s.label, m), {});
 
 const SEED_CAT_KEYWORDS = {
   'Universidad':['uni','universidad','ucatolica','católica','cuota uni','matrícula'],
@@ -1473,6 +1527,7 @@ let currentType = 'expense';
 let pendingEntry = null;
 let selectedCat = null;
 let selectedMedio = null;
+let selectedSubcat = null;
 let currentPeriod = 'hoy';
 let currentFilter = 'todo';
 let currentSearch = '';
@@ -1481,6 +1536,7 @@ let showSummaryMedios = false;
 let editingId = null;
 let editingSelectedCat = null;
 let editingSelectedMedio = null;
+let editingSelectedSubcat = null;
 let configEditing = { kind: null, id: null, type: null };
 
 /* Tanda 3: mes seleccionado en la vista "Mes". Default = mes actual.
@@ -1731,6 +1787,131 @@ function filterByPeriod(arr, period) {
   });
 }
 
+/* ─── Mica: presupuesto, comparativa y modal de subcategorías ───── */
+function micaBudget() {
+  const b = safeGet('rl_budgets', {}) || {};
+  return Number(b[MICA_CAT_ID]) || 0;
+}
+function sumMicaUpTo(year, month, dayInclusive) {
+  // Suma gastos Mica del (year, month) hasta el día dayInclusive (1-based).
+  let sum = 0;
+  for (const e of entries) {
+    if (e.type !== 'expense') continue;
+    if (e.categoryId !== MICA_CAT_ID) continue;
+    const d = new Date(e.date);
+    if (isNaN(d.getTime())) continue;
+    if (d.getFullYear() !== year || d.getMonth() !== month) continue;
+    if (d.getDate() > dayInclusive) continue;
+    sum += Number(e.amount) || 0;
+  }
+  return sum;
+}
+function computeMicaStatus() {
+  const now = new Date();
+  const year = now.getFullYear(), month = now.getMonth(), day = now.getDate();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const budget = micaBudget();
+  const spent = sumMicaUpTo(year, month, day);
+  const expected = budget * (day / daysInMonth);
+  let level = 'ok';
+  if (budget > 0) {
+    if (spent >= budget) level = 'over';
+    else if (spent > expected * 1.05) level = 'warn';
+    else level = 'ok';
+  } else if (spent > 0) {
+    level = 'warn';
+  }
+  // Comparativa con mes anterior al mismo día
+  const prev = new Date(year, month - 1, 1);
+  const prevDays = new Date(prev.getFullYear(), prev.getMonth() + 1, 0).getDate();
+  const prevDay = Math.min(day, prevDays);
+  const prevSpent = sumMicaUpTo(prev.getFullYear(), prev.getMonth(), prevDay);
+  // Proyección lineal a fin de mes
+  const projection = day > 0 ? Math.round(spent * (daysInMonth / day)) : 0;
+  return { budget, spent, expected, level, prevSpent, day, daysInMonth, projection };
+}
+function renderMicaBanner(targetEl) {
+  const s = computeMicaStatus();
+  const pctRaw = s.budget > 0 ? (s.spent / s.budget) : 0;
+  const pct = Math.min(1, pctRaw);
+  const pctLabel = s.budget > 0 ? Math.round(pctRaw * 100) + '%' : '—';
+  const remaining = Math.max(0, s.budget - s.spent);
+  const remainingDays = Math.max(1, s.daysInMonth - s.day + 1);
+  const dailySuggested = s.budget > 0 ? Math.max(0, Math.round(remaining / remainingDays)) : 0;
+  const headline = s.budget > 0
+    ? formatGs(s.spent) + ' / ' + formatGs(s.budget) + ' · ' + pctLabel
+    : formatGs(s.spent) + ' este mes';
+  let foot = '';
+  if (s.budget > 0) {
+    if (s.level === 'over') {
+      foot = '<span>Te pasaste ' + formatGs(s.spent - s.budget) + '</span>';
+    } else {
+      foot = '<span>Quedan <strong>' + formatGs(remaining) + '</strong> para ' + remainingDays + ' día' + (remainingDays === 1 ? '' : 's') + '</span><span><strong>~' + formatGs(dailySuggested) + '</strong>/día</span>';
+    }
+  }
+  const prevLine = s.prevSpent > 0
+    ? '<div class="mica-banner-foot" style="margin-top:6px; opacity:0.7;"><span>El mes pasado a esta altura: <strong>' + formatGs(s.prevSpent) + '</strong></span></div>'
+    : '';
+  targetEl.innerHTML =
+    '<div class="mica-banner ' + s.level + '">' +
+      '<div class="mica-banner-row1">' +
+        '<span class="mica-banner-title">Mica · este mes</span>' +
+        '<span class="mica-banner-amount">' + headline + '</span>' +
+      '</div>' +
+      '<div class="mica-progress-track"><div class="mica-progress-fill" style="width:' + (pct * 100).toFixed(1) + '%;"></div></div>' +
+      (foot ? '<div class="mica-banner-foot">' + foot + '</div>' : '') +
+      prevLine +
+    '</div>';
+  // Header amount
+  const hd = document.getElementById('micaHeaderAmount');
+  if (hd) hd.textContent = s.budget > 0 ? pctLabel : formatGs(s.spent);
+}
+let micaModalContext = null; // 'main' | 'edit' | null
+function openMicaModal(context) {
+  micaModalContext = context || 'main';
+  renderMicaBanner(document.getElementById('micaBannerWrap'));
+  const grid = document.getElementById('micaSubcatGrid');
+  const currentSel = micaModalContext === 'edit' ? editingSelectedSubcat : selectedSubcat;
+  grid.innerHTML = MICA_SUBCATS.map(s =>
+    '<button class="mica-subcat-btn' + (currentSel === s.id ? ' selected' : '') + (s.id === 'nafta' ? ' full' : '') + '" onclick="selectMicaSubcat(\'' + s.id + '\')">' +
+      '<span class="mica-subcat-emoji">' + s.emoji + '</span>' +
+      '<span>' + s.label + '</span>' +
+    '</button>'
+  ).join('');
+  document.getElementById('micaOverlay').classList.add('visible');
+  document.getElementById('micaPanel').classList.add('visible');
+}
+function closeMicaModal() {
+  document.getElementById('micaOverlay').classList.remove('visible');
+  document.getElementById('micaPanel').classList.remove('visible');
+  micaModalContext = null;
+}
+function selectMicaSubcat(subId) {
+  if (micaModalContext === 'edit') {
+    editingSelectedSubcat = subId;
+    // Mantener el chip Mica seleccionado en el editor
+    const editChips = document.getElementById('editCatSelector');
+    if (editChips) {
+      editChips.querySelectorAll('.selector-chip').forEach(c => c.classList.remove('selected'));
+      const chip = editChips.querySelector('button[data-cat="' + MICA_CAT_ID + '"]');
+      if (chip) chip.classList.add('selected');
+    }
+    editingSelectedCat = MICA_CAT_ID;
+  } else {
+    selectedSubcat = subId;
+    selectedCat = MICA_CAT_ID;
+    // Reflejar selección visual en los chips del confirmCard
+    const chips = document.getElementById('catSelector');
+    if (chips) {
+      chips.querySelectorAll('.selector-chip').forEach(c => c.classList.remove('selected'));
+      const chip = chips.querySelector('button[data-cat="' + MICA_CAT_ID + '"]');
+      if (chip) chip.classList.add('selected');
+    }
+  }
+  closeMicaModal();
+  showToast('Mica · ' + MICA_SUBCAT_LABEL[subId]);
+}
+
 /* ─── Type toggle ────────────────────────────────────────────────── */
 function setType(type) {
   currentType = type;
@@ -1800,15 +1981,20 @@ function parseInput() {
   const paymentMethodId = currentType === 'expense' ? inferMedio(text) : null;
   const now = new Date().toISOString();
   pendingEntry = { amount, categoryId, paymentMethodId, date: now, type: currentType, raw: text, note: '' };
-  selectedCat = categoryId; selectedMedio = paymentMethodId;
+  selectedCat = categoryId; selectedMedio = paymentMethodId; selectedSubcat = null;
   document.getElementById('confAmount').textContent = formatGs(amount);
   document.getElementById('confAmount').className = 'confirm-amount-display' + (currentType === 'income' ? ' income-val' : '');
   document.getElementById('confDate').value = toLocalDateTimeInputValue(now);
   document.getElementById('noteInput').value = '';
   const activeCats = getActiveCategoriesByType(currentType);
   document.getElementById('catSelector').innerHTML = activeCats.map(c =>
-    '<button class="selector-chip' + (c.id === categoryId ? ' selected' : '') + '" onclick="selectCat(this,\'' + c.id + '\')">' + escapeHTML(c.name) + '</button>'
+    '<button class="selector-chip' + (c.id === categoryId ? ' selected' : '') + '" data-cat="' + c.id + '" onclick="selectCat(this,\'' + c.id + '\')">' + escapeHTML(c.name) + '</button>'
   ).join('');
+  // Si el sistema infirió Mica desde el texto, abrir el modal automáticamente
+  // para que el usuario elija subcategoría antes de guardar.
+  if (categoryId === MICA_CAT_ID && currentType === 'expense') {
+    setTimeout(() => openMicaModal('main'), 80);
+  }
   const medioSection = document.getElementById('medioSection');
   if (currentType === 'expense') {
     medioSection.style.display = '';
@@ -1823,7 +2009,13 @@ function parseInput() {
   document.getElementById('confirmCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-function selectCat(el, categoryId) { selectedCat = categoryId; el.parentElement.querySelectorAll('.selector-chip').forEach(c => c.classList.remove('selected')); el.classList.add('selected'); }
+function selectCat(el, categoryId) {
+  selectedCat = categoryId;
+  el.parentElement.querySelectorAll('.selector-chip').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  if (categoryId !== MICA_CAT_ID) selectedSubcat = null;
+  if (categoryId === MICA_CAT_ID && currentType === 'expense') openMicaModal('main');
+}
 function selectMedio(el, paymentMethodId) { selectedMedio = paymentMethodId; el.parentElement.querySelectorAll('.selector-chip').forEach(c => c.classList.remove('selected')); el.classList.add('selected'); }
 
 function saveEntry() {
@@ -1834,6 +2026,7 @@ function saveEntry() {
     ...pendingEntry,
     categoryId: selectedCat,
     paymentMethodId: selectedMedio,
+    subcategory: (selectedCat === MICA_CAT_ID && selectedSubcat) ? selectedSubcat : undefined,
     note: document.getElementById('noteInput').value.trim(),
     date: dateIso,
     createdAt: nowIso,
@@ -1851,7 +2044,7 @@ function saveEntry() {
   showToast('Guardado ✓');
 }
 
-function cancelConfirm() { document.getElementById('confirmCard').className = 'confirm-card'; pendingEntry = null; }
+function cancelConfirm() { document.getElementById('confirmCard').className = 'confirm-card'; pendingEntry = null; selectedSubcat = null; }
 function deleteEntry(id) {
   const idx = entries.findIndex(e => e.id === id);
   if (idx === -1) return;
@@ -1884,6 +2077,7 @@ function openEditModal(id) {
   editingId = id;
   editingSelectedCat = entry.categoryId;
   editingSelectedMedio = entry.paymentMethodId;
+  editingSelectedSubcat = entry.subcategory || null;
   document.getElementById('editAmountDisplay').textContent = formatGs(entry.amount);
   document.getElementById('editAmountDisplay').className = 'confirm-amount-display' + (entry.type === 'income' ? ' income-val' : '');
   document.getElementById('editAmountInput').value = entry.amount;
@@ -1895,7 +2089,7 @@ function openEditModal(id) {
   const catsToShow = currentCat && !activeOfType.some(c => c.id === currentCat.id)
     ? [...activeOfType, currentCat] : activeOfType;
   document.getElementById('editCatSelector').innerHTML = catsToShow.map(c =>
-    '<button class="selector-chip' + (c.id === entry.categoryId ? ' selected' : '') + '" onclick="selectEditCat(this,\'' + c.id + '\')">' + escapeHTML(c.name) + (c.active ? '' : ' (archivada)') + '</button>'
+    '<button class="selector-chip' + (c.id === entry.categoryId ? ' selected' : '') + '" data-cat="' + c.id + '" onclick="selectEditCat(this,\'' + c.id + '\')">' + escapeHTML(c.name) + (c.active ? '' : ' (archivada)') + '</button>'
   ).join('');
   const editMedioSection = document.getElementById('editMedioSection');
   if (entry.type === 'expense') {
@@ -1918,12 +2112,16 @@ function closeEditModal() {
   document.getElementById('editOverlay').classList.remove('visible');
   document.getElementById('editPanel').classList.remove('visible');
   editingId = null;
+  editingSelectedSubcat = null;
 }
 
 function selectEditCat(el, categoryId) {
   editingSelectedCat = categoryId;
   el.parentElement.querySelectorAll('.selector-chip').forEach(c => c.classList.remove('selected'));
   el.classList.add('selected');
+  if (categoryId !== MICA_CAT_ID) editingSelectedSubcat = null;
+  const editing = entries.find(e => e.id === editingId);
+  if (categoryId === MICA_CAT_ID && editing && editing.type === 'expense') openMicaModal('edit');
 }
 function selectEditMedio(el, paymentMethodId) {
   editingSelectedMedio = paymentMethodId;
@@ -1943,6 +2141,7 @@ function saveEditEntry() {
     amount: newAmount,
     categoryId: editingSelectedCat,
     paymentMethodId: entries[idx].type === 'expense' ? editingSelectedMedio : null,
+    subcategory: (editingSelectedCat === MICA_CAT_ID && editingSelectedSubcat) ? editingSelectedSubcat : undefined,
     note: newNote,
     date: editedIso,
     updatedAt: new Date().toISOString()
@@ -2463,12 +2662,15 @@ function renderHistorial() {
       const catName = getCategoryName(e.categoryId);
       const pmName = e.paymentMethodId ? getPaymentMethodName(e.paymentMethodId) : '';
       const icon = CAT_ICONS[catName] || '○';
+      const subLabel = (e.categoryId === MICA_CAT_ID && e.subcategory && MICA_SUBCAT_LABEL[e.subcategory])
+        ? ' · ' + MICA_SUBCAT_LABEL[e.subcategory]
+        : '';
       html +=
         '<div class="entry-item" data-id="' + e.id + '">' +
           '<div class="entry-content">' +
             '<div class="entry-icon ' + (e.type === 'income' ? 'income-icon' : 'expense-icon') + '">' + icon + '</div>' +
             '<div class="entry-left">' +
-              '<div class="entry-cat">' + escapeHTML(catName) + '</div>' +
+              '<div class="entry-cat">' + escapeHTML(catName + subLabel) + '</div>' +
               (e.note ? '<div class="entry-note">' + escapeHTML(e.note) + '</div>' : '') +
               '<div class="entry-meta">' + escapeHTML(pmName || (e.type === 'income' ? 'Ingreso' : '')) + '</div>' +
             '</div>' +
