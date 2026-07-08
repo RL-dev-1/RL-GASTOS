@@ -49,8 +49,8 @@
   --glass-shadow-md: 0 14px 40px rgba(17,17,17,0.08);
   --glass-shadow-nav: 0 18px 40px rgba(17,17,17,0.12);
   --header-bg: rgba(251,250,247,0.72);
-  --subtle-border: var(--subtle-border);
-  --subtle-bg: var(--subtle-bg);
+  --subtle-border: rgba(0,0,0,0.05);
+  --subtle-bg: rgba(0,0,0,0.045);
   --r-xs: 8px; --r-sm: 12px; --r-md: 16px; --r-lg: 20px; --r-xl: 24px; --r-pill: 100px;
   --ease: cubic-bezier(0.4, 0, 0.2, 1); --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --t-fast: 120ms; --t-mid: 220ms; --t-slow: 360ms;
@@ -1739,6 +1739,28 @@ function checkBudgetAlert(categoryId, newAmount, entryDate) {
   }
 }
 
+/* Limpia los flags de alerta (warn/over) de una categoría si, tras borrar o
+ * editar un entry, el gasto acumulado del mes cayó por debajo del umbral que
+ * los disparó. Sin esto, alertedCats queda "gastado" para siempre y una
+ * futura re-superación del mismo umbral no vuelve a avisar. Sólo aplica al
+ * mes actual: alertedCats nunca guarda flags de meses pasados (checkBudgetAlert
+ * ya lo garantiza), así que no hay nada que reconciliar fuera de él. */
+function reconcileBudgetAlert(categoryId, entryDate) {
+  if (!categoryId || !entryDate || !isSameMonth(entryDate)) return;
+  const limit = budgets[categoryId];
+  if (!limit || limit <= 0) return;
+  const monthKey = getMonthKey(new Date());
+  const alertKey = monthKey + ':' + categoryId;
+  const state = alertedCats[alertKey];
+  if (!state) return;
+  const spent = getMonthExpensesByCategory()[categoryId] || 0;
+  const pct = spent / limit;
+  let changed = false;
+  if (state.over && pct < 1) { delete state.over; changed = true; }
+  if (state.warn && pct < 0.7) { delete state.warn; changed = true; }
+  if (changed) saveAlerted();
+}
+
 /* ─── Streak ─────────────────────────────────────────────────────── */
 function calcStreak() {
   if (entries.length === 0) return 0;
@@ -1935,9 +1957,14 @@ function parseInput() {
   const text = document.getElementById('mainInput').value.trim();
   if (!text) return;
   const lines = text.split('\n').map(l => l.trim()).filter(l => l);
-  if (lines.length > 1) {
-    let count = 0, total = 0, skipped = 0;
-    const affectedCats = {};
+  // Modo bulk sólo si hay 2+ líneas con un monto parseable cada una. Una sola
+  // línea con monto (aunque el resto del texto esté repartido en más líneas,
+  // ej. "85.500 almuerzo\nitaú black") es UNA carga, no varias, y tiene que
+  // pasar por la tarjeta de confirmación normal.
+  const linesWithAmount = lines.filter(l => parseAmount(l) !== null);
+  if (linesWithAmount.length >= 2) {
+    let total = 0, skipped = 0;
+    const bulkItems = [];
     for (const line of lines) {
       const amount = parseAmount(line);
       if (!amount) continue;
@@ -1947,28 +1974,44 @@ function parseInput() {
       if (isSuspiciousAmount(amount)) { skipped++; continue; }
       const categoryId = inferCategory(line, currentType);
       const paymentMethodId = currentType === 'expense' ? inferMedio(line) : null;
-      const nowIso = new Date().toISOString();
+      bulkItems.push({ amount, categoryId, paymentMethodId, raw: line });
+      total += amount;
+    }
+    if (bulkItems.length === 0 && skipped === 0) { showToast('No encontré montos'); return; }
+    if (bulkItems.length === 0 && skipped > 0) { showToast(skipped + ' línea(s) con montos sospechosos · ninguna registrada', 'danger'); return; }
+    // Preview obligatorio antes de guardar nada: monto → categoría → medio.
+    const previewLines = bulkItems.map(item => {
+      const catName = getCategoryName(item.categoryId);
+      const medioName = item.paymentMethodId ? ' → ' + getPaymentMethodName(item.paymentMethodId) : '';
+      return formatGs(item.amount) + ' → ' + catName + medioName;
+    }).join('\n');
+    const confirmMsg = bulkItems.length + ' registros:\n\n' + previewLines + '\n\nTotal: ' + formatGs(total) +
+      (skipped > 0 ? '\n\n(' + skipped + ' línea(s) con monto sospechoso se van a saltear)' : '');
+    if (!confirm(confirmMsg)) return;
+    const nowIso = new Date().toISOString();
+    const affectedCats = {};
+    bulkItems.forEach(item => {
       entries.unshift({
-        amount, categoryId, paymentMethodId,
+        amount: item.amount, categoryId: item.categoryId, paymentMethodId: item.paymentMethodId,
         date: nowIso, createdAt: nowIso, updatedAt: nowIso,
-        type: currentType, raw: line, note: '',
+        type: currentType, raw: item.raw, note: '',
         id: Date.now().toString() + Math.random().toString(16).slice(2,8)
       });
-      count++; total += amount;
-      if (currentType === 'expense') affectedCats[categoryId] = (affectedCats[categoryId] || 0) + amount;
-    }
-    if (count === 0 && skipped === 0) { showToast('No encontré montos'); return; }
-    if (count === 0 && skipped > 0) { showToast(skipped + ' línea(s) con montos sospechosos · ninguna registrada', 'danger'); return; }
+      if (currentType === 'expense') affectedCats[item.categoryId] = (affectedCats[item.categoryId] || 0) + item.amount;
+    });
     save();
-    const nowIso = new Date().toISOString();
     Object.entries(affectedCats).forEach(([cid, amt]) => checkBudgetAlert(cid, amt, nowIso));
     const inp = document.getElementById('mainInput');
     inp.value = ''; inp.style.height = '110px';
-    const msg = count + ' registros · ' + formatGs(total) + (skipped > 0 ? ' · ' + skipped + ' saltados' : '');
+    const msg = bulkItems.length + ' registros · ' + formatGs(total) + (skipped > 0 ? ' · ' + skipped + ' saltados' : '');
     showToast(msg, skipped > 0 ? 'warning' : null);
     return;
   }
-  const amount = parseAmount(text);
+  // Modo single: si el texto vino repartido en varias líneas pero sólo una
+  // (o ninguna) tenía monto, se une todo con espacios y sigue el flujo
+  // normal de una sola carga con tarjeta de confirmación.
+  const singleText = lines.length > 1 ? lines.join(' ') : text;
+  const amount = parseAmount(singleText);
   if (!amount) { showToast('No encontré el monto'); return; }
   // Guard contra montos absurdos (típicamente bug de tipeo o parser raro).
   // Pedir confirmación explícita antes de dejar pasar un valor enorme.
@@ -1977,10 +2020,10 @@ function parseInput() {
       return;
     }
   }
-  const categoryId = inferCategory(text, currentType);
-  const paymentMethodId = currentType === 'expense' ? inferMedio(text) : null;
+  const categoryId = inferCategory(singleText, currentType);
+  const paymentMethodId = currentType === 'expense' ? inferMedio(singleText) : null;
   const now = new Date().toISOString();
-  pendingEntry = { amount, categoryId, paymentMethodId, date: now, type: currentType, raw: text, note: '' };
+  pendingEntry = { amount, categoryId, paymentMethodId, date: now, type: currentType, raw: singleText, note: '' };
   selectedCat = categoryId; selectedMedio = paymentMethodId; selectedSubcat = null;
   document.getElementById('confAmount').textContent = formatGs(amount);
   document.getElementById('confAmount').className = 'confirm-amount-display' + (currentType === 'income' ? ' income-val' : '');
@@ -2053,6 +2096,7 @@ function deleteEntry(id) {
   const removedIdx = idx;
   entries.splice(idx, 1);
   save();
+  if (removed.type === 'expense') reconcileBudgetAlert(removed.categoryId, removed.date);
   renderHistorial();
   renderResumen();
   // Toast con Deshacer de 5s
@@ -2148,8 +2192,13 @@ function saveEditEntry() {
   };
   const err = validateEntry(updated);
   if (err) { showToast(err, 'danger'); return; }
+  const oldEntry = entries[idx];
   entries[idx] = updated;
   save();
+  if (updated.type === 'expense') {
+    reconcileBudgetAlert(oldEntry.categoryId, oldEntry.date);
+    if (updated.categoryId !== oldEntry.categoryId) reconcileBudgetAlert(updated.categoryId, updated.date);
+  }
   closeEditModal();
   renderHistorial();
   renderResumen();

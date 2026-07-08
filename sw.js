@@ -1,4 +1,10 @@
-const CACHE_NAME = 'rl-gastos-v2';
+// Bumpear en cada deploy que toque rl-gastos.html (o cualquier asset
+// precacheado). El browser sólo detecta una versión nueva del SW si el
+// contenido de ESTE archivo cambia — si sólo se edita rl-gastos.html y no se
+// bumpea CACHE_VERSION acá, el cache-first de abajo sigue sirviendo la
+// versión vieja indefinidamente.
+const CACHE_VERSION = 'v3';
+const CACHE_NAME = 'rl-gastos-' + CACHE_VERSION;
 
 const PRECACHE = [
   '/rl-gastos.html',
@@ -7,13 +13,22 @@ const PRECACHE = [
   '/icon-512.png',
 ];
 
-// Install: precache core assets
+// Install: precache core assets. No hace skipWaiting acá — espera al mensaje
+// SKIP_WAITING explícito de rl-gastos.html para no recargar de golpe otras
+// pestañas abiertas a mitad de un registro.
 self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => cache.addAll(PRECACHE))
-      .then(() => self.skipWaiting())
   );
+});
+
+// Mensaje desde rl-gastos.html cuando detecta un SW nuevo instalado: recién
+// ahí se activa, para no interrumpir pestañas con trabajo en curso.
+self.addEventListener('message', e => {
+  if (e.data && e.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 // Activate: remove old caches
