@@ -3,7 +3,7 @@
 // contenido de ESTE archivo cambia — si sólo se edita rl-gastos.html y no se
 // bumpea CACHE_VERSION acá, el cache-first de abajo sigue sirviendo la
 // versión vieja indefinidamente.
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v4';
 const CACHE_NAME = 'rl-gastos-' + CACHE_VERSION;
 
 const PRECACHE = [
