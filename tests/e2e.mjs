@@ -5,15 +5,15 @@ import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import { initialState, saveMovement, makeBackup } from '../src/core.mjs';
 const require=createRequire(import.meta.url);
-const {chromium}=require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const browserType=require(process.env.PLAYWRIGHT_MODULE || 'playwright')[process.env.TEST_BROWSER || 'chromium'];
 const base=process.env.TEST_BASE_URL || 'http://127.0.0.1:8080';
 const temp=mkdtempSync(join(tmpdir(),'rl-e2e-'));
 let seed=initialState();
 for(let i=0;i<3;i++)seed=saveMovement(seed,{id:'sample-'+i,amount:1000*(i+1),type:'expense',categoryId:'cat_almuerzo',paymentMethodId:'pay_efectivo',note:'Ficticio '+i,raw:'Ejemplo',occurredOn:i<2?'2026-08-01':'2026-07-01'});
 const fixture=join(temp,'fixture.json');writeFileSync(fixture,JSON.stringify(makeBackup(seed)));
-const browser=await chromium.launch({headless:true,...(process.env.CHROME_EXECUTABLE?{executablePath:process.env.CHROME_EXECUTABLE}:{})});
+const browser=await browserType.launch({headless:true,...(process.env.CHROME_EXECUTABLE?{executablePath:process.env.CHROME_EXECUTABLE}:{})});
 try{
- const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,timezoneId:'America/Asuncion'}),page=await context.newPage();
+ const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,locale:'es-PY',timezoneId:'America/Asuncion'}),page=await context.newPage();
  await page.clock.setFixedTime(new Date('2026-09-05T15:00:00Z'));
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto(base+'/tests/browser.html');await page.getByRole('button',{name:'Ejecutar pruebas'}).click();await page.waitForFunction(()=>/10 \/ 10|FAIL/.test(document.getElementById('results').textContent));assert.match(await page.locator('#results').innerText(),/10 \/ 10/);

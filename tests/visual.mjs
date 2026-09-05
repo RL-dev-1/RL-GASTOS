@@ -7,7 +7,7 @@ const base=process.env.TEST_BASE_URL||'http://127.0.0.1:8080',out=process.env.AR
 mkdirSync(out,{recursive:true});
 const browser=await chromium.launch({headless:true,...(process.env.CHROME_EXECUTABLE?{executablePath:process.env.CHROME_EXECUTABLE}:{})});
 try{
- const context=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true,timezoneId:'America/Asuncion',colorScheme:'light'}),page=await context.newPage();
+ const context=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true,locale:'es-PY',timezoneId:'America/Asuncion',colorScheme:'light'}),page=await context.newPage();
  await page.goto(base+'/rl-gastos.html');await page.getByRole('heading',{name:'Tus gastos, en claro.'}).waitFor();
  await page.evaluate(async()=>{
   const {Store}=await import('./src/store.mjs');const {initialState,saveMovement,dayKey,monthKey}=await import('./src/core.mjs');const store=new Store();let current=await store.open(),s=initialState();
