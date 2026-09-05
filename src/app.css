@@ -17,3 +17,6 @@ dialog { width:min(600px,100% - 24px); max-height:calc(100dvh - 36px); border:1p
 .status-line { overflow-wrap:anywhere; }
 @media(prefers-reduced-motion:no-preference) { button { transition:background .15s ease; } button:active { opacity:.8; } }
 @media print { .topbar,.bottom-nav,.add-button,.actions,.month-nav button,.filters,.link-button { display:none!important; } body,main,.card,.hero { color:#111!important; background:white!important; } main { padding:0; } .private { filter:none; } }
+
+/* The deploy-preview review drawer overlaps the mobile bottom navigation. */
+iframe[title="Netlify Drawer"] { display: none !important; }

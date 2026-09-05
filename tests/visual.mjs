@@ -19,6 +19,8 @@ try{
  await page.screenshot({path:join(out,'rl-gastos-iphone.png'),animations:'disabled'});
  if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw new Error('Mobile horizontal overflow');
  await page.getByRole('button',{name:'Registrar gasto',exact:false}).click();await page.getByRole('button',{name:'Usar formulario'}).click();await page.screenshot({path:join(out,'rl-gastos-registro.png'),animations:'disabled'});await page.getByRole('button',{name:'Cerrar y conservar borrador'}).click();
+ await page.waitForFunction(()=>!document.getElementById('editor').open);
+ await page.evaluate(()=>{document.querySelector('.lead .eyebrow').textContent='DEMO · DATOS FICTICIOS';});
  await page.emulateMedia({colorScheme:'dark'});await page.screenshot({path:join(out,'rl-gastos-oscuro.png'),animations:'disabled'});
  await page.emulateMedia({colorScheme:'light'});await page.setViewportSize({width:1280,height:920});await page.screenshot({path:join(out,'rl-gastos-escritorio.png'),animations:'disabled',fullPage:true});
  console.log('PASS: captures with synthetic data; mobile, dark, entry, desktop; no horizontal overflow.');

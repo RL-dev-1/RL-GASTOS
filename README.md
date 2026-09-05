@@ -64,7 +64,7 @@ La validación compara cada campo original y los totales por mes; verifica tambi
 
 `npm run build` genera `sw.js` con una versión calculada desde todos los archivos de la app. `npm run check` detecta un worker desactualizado; CI ejecuta reglas, almacenamiento y flujos de navegador. El worker conserva la versión anterior hasta que el usuario elija actualizar; la app conserva el borrador antes de recargar. Los recursos ajenos a la app no reciben un HTML como fallback.
 
-Netlify construye con Node 22. Primero usar una deploy preview y verificar importación, teclado, descarga/compartir y reapertura sin conexión en **Safari y la app instalada del iPhone real**. La emulación de Chrome no reemplaza esa comprobación. Cerrar la versión anterior en otras pestañas antes de migrar: el código antiguo no conoce IndexedDB.
+Netlify construye con Node 22. Primero usar una deploy preview y verificar importación, teclado, descarga/compartir y reapertura sin conexión en **Safari y la app instalada del iPhone real**. CI prueba los flujos en Chromium y WebKit, y además la reapertura sin conexión en Chromium. Playwright limita el soporte de service workers a Chromium; la reapertura offline de Safari queda pendiente del iPhone real. Ninguna emulación reemplaza esa comprobación. Cerrar la versión anterior en otras pestañas antes de migrar: el código antiguo no conoce IndexedDB.
 
 No revertir al HTML antiguo para editar datos después de migrar: sus datos son una copia anterior de localStorage. Una reversión debe conservar IndexedDB y restaurar una versión compatible o usar un backup v3. Conservar backups antes de cualquier migración.
 

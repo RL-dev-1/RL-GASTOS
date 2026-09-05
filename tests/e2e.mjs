@@ -6,6 +6,9 @@ import assert from 'node:assert/strict';
 import { initialState, saveMovement, makeBackup } from '../src/core.mjs';
 const require=createRequire(import.meta.url);
 const browserType=require(process.env.PLAYWRIGHT_MODULE || 'playwright')[process.env.TEST_BROWSER || 'chromium'];
+// Playwright service-worker/offline emulation is supported only in Chromium.
+// https://playwright.dev/docs/service-workers
+const offlineReload = (process.env.TEST_BROWSER || 'chromium') === 'chromium';
 const base=process.env.TEST_BASE_URL || 'http://127.0.0.1:8080';
 const temp=mkdtempSync(join(tmpdir(),'rl-e2e-'));
 let seed=initialState();
@@ -31,11 +34,12 @@ try{
  // Cancelling replacement must preserve the pending new-entry draft.
  assert.equal(await page.locator('#editor').isVisible(),false);
  await page.locator('nav [data-tab=export]').click();const downloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:'Exportar para ChatGPT'}).click();const downloaded=await downloadPromise;const exported=JSON.parse(readFileSync(await downloaded.path(),'utf8'));assert.equal(exported.controls.all.count,3);assert.equal(exported.controls.selected.count,2);
- await page.evaluate(()=>navigator.serviceWorker.ready);await context.setOffline(true);await page.reload();await page.getByRole('heading',{name:'Tus gastos, en claro.'}).waitFor();await page.getByRole('button',{name:'Registrar gasto',exact:false}).click();await page.getByRole('button',{name:'Revisar registros'}).click();await page.getByRole('button',{name:'Guardar movimiento',exact:true}).click();await page.waitForFunction(()=>!document.getElementById('editor').open);await page.reload();await page.getByRole('heading',{name:'Tus gastos, en claro.'}).waitFor();assert.match(await page.locator('main').innerText(),/85.000/);
- assert.equal(await page.evaluate(async()=>{try{await fetch('/uncached-probe-'+Date.now(),{cache:'no-store'});return false;}catch{return true;}}),true);
+ await page.evaluate(()=>navigator.serviceWorker.ready);if(offlineReload)await context.setOffline(true);await page.reload();await page.getByRole('heading',{name:'Tus gastos, en claro.'}).waitFor();await page.getByRole('button',{name:'Registrar gasto',exact:false}).click();await page.getByRole('button',{name:'Revisar registros'}).click();await page.getByRole('button',{name:'Guardar movimiento',exact:true}).click();await page.waitForFunction(()=>!document.getElementById('editor').open);await page.reload();await page.getByRole('heading',{name:'Tus gastos, en claro.'}).waitFor();assert.match(await page.locator('main').innerText(),/85.000/);
+ if(offlineReload)assert.equal(await page.evaluate(async()=>{try{await fetch('/uncached-probe-'+Date.now(),{cache:'no-store'});return false;}catch{return true;}}),true);
  await page.locator('nav [data-tab=history]').click();await page.locator('[data-action=edit]').first().click();await page.locator('[name=amount]').fill('86000');await page.getByRole('button',{name:'Guardar cambios',exact:true}).click();await page.waitForFunction(()=>!document.getElementById('editor').open);assert.match(await page.locator('#history-list').innerText(),/86.000/);
  await page.locator('[data-action=edit]').first().click();await page.getByRole('button',{name:'Enviar a papelera'}).click();await page.waitForFunction(()=>!document.getElementById('editor').open);assert.equal(await page.locator('[data-action=edit]').count(),0);
  await page.getByRole('button',{name:'Papelera',exact:true}).click();await page.locator('[data-action=restore]').first().click();await page.getByRole('button',{name:'Ver activos',exact:true}).click();assert.match(await page.locator('#history-list').innerText(),/86.000/);
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);assert.deepEqual(errors,[]);
- console.log('PASS: storage suite; mobile registration; hidden conditional fields; reload; draft recovery; import; monthly budgets; draft replacement guard; export controls; offline reload/save/edit/trash/restore; no overflow or page errors.');
+ console.log(offlineReload ? 'OFFLINE reopen/save/edit/restore verified in Chromium.' : 'WebKit: online flow verified; offline reopen requires real Safari validation.');
+ console.log('PASS: storage suite; mobile registration; hidden conditional fields; reload; draft recovery; import; monthly budgets; draft replacement guard; export controls; reload/save/edit/trash/restore; no overflow or page errors.');
 }finally{await browser.close();rmSync(temp,{recursive:true,force:true});}
