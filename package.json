@@ -1,0 +1,8 @@
+{
+  "name": "rl-gastos",
+  "version": "3.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test tests/core.test.mjs", "check": "node --check src/app.mjs && node --check src/store.mjs && node --check sw.js && node scripts/build-sw.mjs --check", "build": "node scripts/build-sw.mjs", "start": "python3 -m http.server 8080" },
+  "engines": { "node": ">=22" }
+}
