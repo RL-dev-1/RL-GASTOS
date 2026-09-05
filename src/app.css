@@ -19,4 +19,4 @@ dialog { width:min(600px,100% - 24px); max-height:calc(100dvh - 36px); border:1p
 @media print { .topbar,.bottom-nav,.add-button,.actions,.month-nav button,.filters,.link-button { display:none!important; } body,main,.card,.hero { color:#111!important; background:white!important; } main { padding:0; } .private { filter:none; } }
 
 /* The deploy-preview review drawer overlaps the mobile bottom navigation. */
-iframe[title="Netlify Drawer"] { display: none !important; }
+[data-netlify-deploy-id], iframe[title="Netlify Drawer"] { display: none !important; }
