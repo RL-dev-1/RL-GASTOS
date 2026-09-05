@@ -107,11 +107,14 @@ function renderEditor() {
   const quick = draft.mode === 'quick';
   $('editor-content').innerHTML = `<div class="dialog-top"><h2 id="editor-title">${draft.editId ? 'Editar movimiento' : 'Registrar'}</h2><button class="icon-button" data-action="close-editor" aria-label="Cerrar y conservar borrador">×</button></div><div id="form-error" class="form-error" role="alert"></div><button id="reload-data" hidden class="button" data-action="reload">Recargar datos guardados</button>${quick ? `<p class="muted">Empezá por el monto. Revisás todo antes de guardar.</p><label>Tipo<select id="quick-type"><option value="expense" ${draft.type==='expense'?'selected':''}>Gasto</option><option value="income" ${draft.type==='income'?'selected':''}>Ingreso</option></select></label><label>Uno o varios movimientos<textarea id="quick-text" rows="4" placeholder="85.500 almuerzo itaú black&#10;200k ropa atlas">${h(draft.text)}</textarea></label><div class="actions"><button class="button primary" data-action="parse">Revisar registros</button><button class="button" data-action="manual">Usar formulario</button></div>` : `<form id="movement-form">${draft.items.map(entryForm).join('')}<div class="dialog-footer"><button class="button primary wide" type="submit" data-write>${draft.editId ? 'Guardar cambios' : 'Guardar ' + (draft.items.length > 1 ? draft.items.length + ' movimientos' : 'movimiento')}</button></div></form>`}<div id="draft-status" class="draft-status"></div><div class="actions"><button class="link-button" data-action="export-draft">Exportar borrador</button><button class="link-button danger" data-action="discard-draft">Descartar borrador</button></div>${draft.editId ? `<div class="actions"><button class="button" data-action="favorite" data-id="${h(draft.editId)}" data-write>${state.favorites.includes(draft.editId)?'Quitar favorito':'Guardar favorito'}</button><button class="button danger" data-action="delete" data-id="${h(draft.editId)}" data-write>Enviar a papelera</button></div><p class="small muted">ID ${h(draft.editId)} · Revisión ${draft.editVersion}</p>` : ''}`;
 }
+function assertEditedMovementCurrent() {
+  if (draft.editId && (state.entries.find(e => e.id === draft.editId)?.version !== draft.editVersion || (draft.original && JSON.stringify(state.entries.find(e => e.id === draft.editId)) !== JSON.stringify(draft.original)))) throw new Error('Este movimiento cambió mientras lo editabas. Exportá el borrador y abrí la versión actual para comparar.');
+}
 async function submitMovements() {
   if (busy) return;
   captureEditor();
   try {
-    if (draft.editId && (state.entries.find(e => e.id === draft.editId)?.version !== draft.editVersion || (draft.original && JSON.stringify(state.entries.find(e => e.id === draft.editId)) !== JSON.stringify(draft.original)))) throw new Error('Este movimiento cambió mientras lo editabas. Exportá el borrador y abrí la versión actual para comparar.');
+    assertEditedMovementCurrent();
     let candidate = state, duplicate = false;
     for (const item of draft.items) {
       if (item.occurredOn > dayKey()) throw new Error('Usá la fecha de un gasto realizado. Los gastos futuros no se registran como realizados.');
@@ -198,7 +201,7 @@ document.addEventListener('click',async e=>{
     if(action==='discard-draft' && confirm('¿Descartar este borrador? Los movimientos guardados no cambian.')){await store.draft(null,draftKey);draft=null;$('editor').close();render();}
     if(action==='export-draft'){captureEditor();download(JSON.stringify({app:'RL Gastos',kind:'draft',draft},null,2),'rl_gastos_borrador.json','application/json');}
     if(action==='reload'){await refreshData();$('reload-data').hidden=true;}
-    if(action==='delete'){if(await commit(setDeleted(state,id,true),'Movimiento enviado a papelera.',{clearDraft:draftKey})){draft=null;$('editor').close();render();}}
+    if(action==='delete'){assertEditedMovementCurrent();if(await commit(setDeleted(state,id,true),'Movimiento enviado a papelera.',{clearDraft:draftKey})){draft=null;$('editor').close();render();}}
     if(action==='restore') await commit(setDeleted(state,id,false),'Movimiento restaurado.');
     if(action==='favorite'){const next=clone(state);next.favorites=next.favorites.includes(id)?next.favorites.filter(x=>x!==id):[...next.favorites,id];if(await commit(next,'Favoritos actualizados.'))renderEditor();}
     if(action==='category'){filters={category:id,method:'',search:'',type:'expense',trash:false,from:'',to:''};navigate('history');}

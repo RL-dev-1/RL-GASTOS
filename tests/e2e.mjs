@@ -39,7 +39,20 @@ try{
  await page.locator('nav [data-tab=history]').click();await page.locator('[data-action=edit]').first().click();await page.locator('[name=amount]').fill('86000');await page.getByRole('button',{name:'Guardar cambios',exact:true}).click();await page.waitForFunction(()=>!document.getElementById('editor').open);assert.match(await page.locator('#history-list').innerText(),/86.000/);
  await page.locator('[data-action=edit]').first().click();await page.getByRole('button',{name:'Enviar a papelera'}).click();await page.waitForFunction(()=>!document.getElementById('editor').open);assert.equal(await page.locator('[data-action=edit]').count(),0);
  await page.getByRole('button',{name:'Papelera',exact:true}).click();await page.locator('[data-action=restore]').first().click();await page.getByRole('button',{name:'Ver activos',exact:true}).click();assert.match(await page.locator('#history-list').innerText(),/86.000/);
+ // A second tab's edit must not be silently deleted by an already-open editor.
+ await page.locator('[data-action=edit]').first().click();
+ await page.evaluate(async()=>{
+  const {Store}=await import('./src/store.mjs'),{saveMovement,dayKey}=await import('./src/core.mjs');
+  const other=new Store();const current=await other.open();const entry=current.entries.find(e=>!e.deletedAt && e.occurredOn===dayKey());
+  const saved=await other.commit(saveMovement(current,{...entry,note:'Cambio desde otra pestaña'},entry.id),current.revision);
+  const broadcast=new BroadcastChannel('rl-gastos-v3');broadcast.postMessage({revision:saved.revision});broadcast.close();other.close();
+ });
+ await page.waitForFunction(()=>document.getElementById('form-error').textContent.includes('otra pestaña'));
+ await page.getByRole('button',{name:'Enviar a papelera'}).click();
+ await page.waitForFunction(()=>document.getElementById('form-error').textContent.includes('cambió mientras'));
+ assert.equal(await page.locator('#editor').isVisible(),true);
+ assert.equal(await page.evaluate(async()=>{const {Store}=await import('./src/store.mjs');const s=new Store();const current=await s.open();s.close();return current.entries.some(e=>e.note==='Cambio desde otra pestaña' && !e.deletedAt);}),true);
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);assert.deepEqual(errors,[]);
  console.log(offlineReload ? 'OFFLINE reopen/save/edit/restore verified in Chromium.' : 'WebKit: online flow verified; offline reopen requires real Safari validation.');
- console.log('PASS: storage suite; mobile registration; hidden conditional fields; reload; draft recovery; import; monthly budgets; draft replacement guard; export controls; reload/save/edit/trash/restore; no overflow or page errors.');
+ console.log('PASS: storage suite; mobile registration; hidden conditional fields; reload; draft recovery; import; monthly budgets; draft replacement guard; export controls; reload/save/edit/trash/restore; stale deletion rejected; no overflow or page errors.');
 }finally{await browser.close();rmSync(temp,{recursive:true,force:true});}
