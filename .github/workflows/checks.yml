@@ -21,8 +21,7 @@ jobs:
       - run: |
           python3 -m http.server 8080 --bind 127.0.0.1 &
           node tests/e2e.mjs
-      - if: matrix.browser == 'chromium'
-        run: node tests/visual.mjs
+      - run: node tests/visual.mjs
       - name: Test published preview
         if: github.event_name == 'pull_request' && matrix.browser == 'chromium'
         env:
@@ -31,8 +30,8 @@ jobs:
           node tests/wait-preview.mjs
           node tests/e2e.mjs
       - uses: actions/upload-artifact@v4
-        if: matrix.browser == 'chromium'
+        if: always()
         with:
-          name: visual-preview
-          path: artifacts/*.png
+          name: visual-preview-${{ matrix.browser }}
+          path: artifacts/
           retention-days: 7
