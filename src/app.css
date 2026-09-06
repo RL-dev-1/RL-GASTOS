@@ -61,6 +61,8 @@ p { margin:8px 0; }
 .month-nav button { display:grid; place-items:center; width:44px; height:44px; flex:0 0 44px; background:var(--surface); border:1px solid var(--line); border-radius:var(--control-radius); }
 .grid { display:grid; grid-template-columns:minmax(0,1fr); gap:24px; }
 .grid > *,.stack > * { min-width:0; }
+.home-grid { align-items:start; }
+.home-summary .favorite-strip { margin-bottom:0; }
 .stack { display:grid; align-content:start; gap:16px; }
 .card,.hero { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:20px; box-shadow:var(--shadow); }
 .hero { padding:24px; }
@@ -168,6 +170,10 @@ button:not(:disabled):active { opacity:.8; }
 @media(min-width:760px) {
   main { padding:28px 24px 40px; }
   .grid { grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
+  .home-grid { grid-template-areas:"summary recent" "categories recent"; }
+  .home-summary { grid-area:summary; }
+  .home-recent { grid-area:recent; }
+  .home-categories { grid-area:categories; }
   .app-navigation { padding-left:max(24px,calc((100% - 680px)/2)); padding-right:max(24px,calc((100% - 680px)/2)); }
   .filters { grid-template-columns:repeat(4,minmax(0,1fr)); }
   .filters .full { grid-column:1/-1; }
