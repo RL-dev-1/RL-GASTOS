@@ -49,7 +49,7 @@ export class Store {
       try { work(Object.fromEntries(names.map(n => [n, tx.objectStore(n)])), tx); } catch (e) { tx.failure = e; tx.abort(); }
     });
   }
-  async commit(candidate, expectedRevision, { recovery = false, clearDraft = null } = {}) {
+  async commit(candidate, expectedRevision, { recovery = false, clearDraft = null, clearDraftToken = null } = {}) {
     const next = clone(validateState(candidate));
     next.revision = expectedRevision + 1;
     await this.transaction(['state','recovery','drafts'], (stores, tx) => {
@@ -59,14 +59,19 @@ export class Store {
         if ((current?.revision ?? -1) !== expectedRevision) { tx.failure = new ConflictError(); tx.abort(); return; }
         if (recovery && current) stores.recovery.put({ at: new Date().toISOString(), reason: 'before-replacement', state: current }, 'before-replacement');
         stores.state.put(next, 'current');
-        if (clearDraft) stores.drafts.delete(clearDraft);
+        if (clearDraft) this.deleteDraft(stores.drafts, clearDraft, clearDraftToken);
       };
     });
     return next;
   }
-  async draft(value, key = 'entry') { return this.transaction(['drafts'], s => value === null ? s.drafts.delete(key) : s.drafts.put(value, key)); }
+  deleteDraft(drafts, key, token) {
+    if (!token) { drafts.delete(key); return; }
+    const req = drafts.get(key);
+    req.onsuccess = () => { if (req.result?.token === token) drafts.delete(key); };
+  }
+  async draft(value, key = 'entry', token = null) { return this.transaction(['drafts'], s => value === null ? this.deleteDraft(s.drafts, key, token) : s.drafts.put(value, key)); }
   getDraft(key = 'entry') { return new Promise((resolve, reject) => { const req = this.db.transaction('drafts').objectStore('drafts').get(key); req.onsuccess = () => resolve(req.result || null); req.onerror = () => reject(req.error); }); }
-  drafts() { return new Promise((resolve, reject) => { const req = this.db.transaction('drafts').objectStore('drafts').getAll(); req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error); }); }
+  drafts(kind = 'entry') { return new Promise((resolve, reject) => { const req = this.db.transaction('drafts').objectStore('drafts').getAll(); req.onsuccess = () => resolve(req.result.filter(d => (d.kind || 'entry') === kind)); req.onerror = () => reject(req.error); }); }
   recoveries() { return new Promise((resolve, reject) => { const req = this.db.transaction('recovery').objectStore('recovery').getAll(); req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error); }); }
   close() { this.db?.close(); }
 }
