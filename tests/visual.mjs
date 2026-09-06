@@ -30,7 +30,7 @@ try {
    if(overlap(a,b)||overlap(a,h))bad.push('Navigation or header overlaps main');
    if(document.documentElement.scrollWidth>innerWidth+1||main.scrollWidth>main.clientWidth+1)bad.push('Horizontal overflow');
    const dialog=document.querySelector('dialog[open]');
-   if(dialog){const r=dialog.getBoundingClientRect();if(r.left<0||r.right>innerWidth+1||r.top<0||r.bottom>innerHeight+1||dialog.scrollWidth>dialog.clientWidth+1)bad.push('Dialog clipped');}
+   if(dialog){const r=dialog.getBoundingClientRect();if(r.left<0||r.right>innerWidth+1||r.top<0||r.bottom>innerHeight+1||dialog.scrollWidth>dialog.clientWidth+1)bad.push('Dialog clipped '+JSON.stringify({left:r.left,right:r.right,top:r.top,bottom:r.bottom,sw:dialog.scrollWidth,cw:dialog.clientWidth,viewport:[innerWidth,innerHeight]}));}
    const area=dialog||main;
    for(const row of area.querySelectorAll('.movement,.budget-row,.form-row,.dialog-top,.hero-footer')){
     const boxes=[...row.children].filter(el=>getComputedStyle(el).display!=='none').map(el=>el.getBoundingClientRect());

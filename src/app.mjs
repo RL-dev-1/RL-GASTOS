@@ -21,7 +21,7 @@ function openPanel(dialog) {
   dialog.showModal();
   dialog.scrollTop = 0;
   if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    dialog.animate([{ opacity: 0, transform: 'translateY(12px)' }, { opacity: 1, transform: 'translateY(0)' }], { duration: 220, easing: 'ease-in-out' });
+    dialog.animate([{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'translateY(0)' }], { duration: 220, easing: 'ease-in-out' });
   }
 }
 function closePanel(dialog) {
@@ -30,7 +30,7 @@ function closePanel(dialog) {
   const closing = (async () => {
     dialog.inert = true;
     if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      await dialog.animate([{ opacity: 1, transform: 'translateY(0)' }, { opacity: 0, transform: 'translateY(8px)' }], { duration: 220, easing: 'ease-in-out' }).finished.catch(() => {});
+      await dialog.animate([{ opacity: 1, transform: 'translateY(0)' }, { opacity: 0, transform: 'translateY(6px)' }], { duration: 220, easing: 'ease-in-out' }).finished.catch(() => {});
     }
     dialog.close();
     dialog.inert = false;

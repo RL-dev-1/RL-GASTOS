@@ -141,7 +141,7 @@ dialog p { font-size:var(--text-sm); overflow-wrap:anywhere; }
 .dialog-footer { margin:20px 0 0; padding-top:16px; border-top:1px solid var(--line); }
 .amount-input { font-size:var(--text-2xl); font-weight:600; letter-spacing:-.5px; }
 .batch-row { padding:0 0 20px; margin-bottom:20px; border-bottom:1px solid var(--line); }
-.batch-row:last-of-type { margin-bottom:0; border-bottom:0; }
+.batch-row:nth-last-child(2) { margin-bottom:0; padding-bottom:0; border-bottom:0; }
 .draft-status { font-size:var(--text-xs); color:var(--muted); margin-top:12px; min-height:18px; }
 .privacy .private { filter:blur(7px); user-select:none; }
 .loading { padding:40px 16px; text-align:center; color:var(--muted); }
