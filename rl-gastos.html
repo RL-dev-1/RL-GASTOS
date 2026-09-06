@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#f6f5f1">
+<meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="RL Gastos">
 <title>RL Gastos</title>
@@ -16,19 +16,19 @@
 <body>
 <a class="skip" href="#main">Ir al contenido</a>
 <header class="topbar">
-<a class="brand" href="./rl-gastos.html" aria-label="RL Gastos, inicio"><span class="logo">RL</span><span>Gastos<span class="brand-sub">TU DÍA, EN CLARO</span></span></a>
-<div class="header-actions"><button id="privacy" class="icon-button" aria-label="Ocultar montos">◉</button><button data-action="settings" class="icon-button" aria-label="Ajustes">⚙</button></div>
+<a class="brand" href="./rl-gastos.html" aria-label="RL Gastos, inicio"><span class="logo">RL</span><span>Gastos</span></a>
+<div class="header-actions"><button id="privacy" class="icon-button" aria-label="Ocultar montos"><span data-icon="eye"></span></button><button data-action="settings" class="icon-button" aria-label="Ajustes"><span data-icon="settings"></span></button></div>
 </header>
-<div id="notice" role="status" class="notice" hidden></div>
-<div id="update" class="update" hidden>Hay una nueva versión. Tu borrador se conservará. <button data-action="update">Actualizar</button></div>
-<main id="main" tabindex="-1"><div class="loading">Preparando tus gastos…</div></main>
-<button id="add" class="add-button" data-action="add">＋ Registrar gasto</button>
+<div id="messages"><div id="notice" role="status" class="notice" hidden></div>
+<div id="update" class="update" hidden>Hay una nueva versión. Tu borrador se conservará. <button data-action="update">Actualizar</button></div></div>
+<main id="main" tabindex="-1"><div class="loading">Cargando movimientos…</div></main>
+<aside class="app-navigation" aria-label="Acciones y secciones"><button id="add" class="add-button" data-action="add"><span data-icon="plus"></span>Registrar gasto</button>
 <nav class="bottom-nav" aria-label="Navegación principal">
-<button data-action="nav" data-tab="home" aria-current="page"><span aria-hidden="true">⌂</span>Inicio</button>
-<button data-action="nav" data-tab="history"><span aria-hidden="true">≡</span>Movimientos</button>
-<button data-action="nav" data-tab="budgets"><span aria-hidden="true">◷</span>Presupuestos</button>
-<button data-action="nav" data-tab="export"><span aria-hidden="true">↗</span>Exportar</button>
-</nav>
+<button data-action="nav" data-tab="home" aria-current="page"><span data-icon="home" aria-hidden="true"></span>Inicio</button>
+<button data-action="nav" data-tab="history"><span data-icon="history" aria-hidden="true"></span>Movimientos</button>
+<button data-action="nav" data-tab="budgets"><span data-icon="budgets" aria-hidden="true"></span>Presupuestos</button>
+<button data-action="nav" data-tab="export"><span data-icon="export" aria-hidden="true"></span>Exportar</button>
+</nav></aside>
 <dialog id="editor" aria-labelledby="editor-title"><div id="editor-content"></div></dialog>
 <dialog id="settings" aria-labelledby="settings-title"><div id="settings-content"></div></dialog>
 <dialog id="import-dialog" aria-labelledby="import-title"><div id="import-content"></div></dialog>

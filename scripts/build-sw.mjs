@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-const assets = ['rl-gastos.html','manifest.json','src/app.css','src/app.mjs','src/core.mjs','src/store.mjs','src/seeds.mjs','icon-32.png','icon-180.png','icon-192.png','icon-512.png'];
+const assets = ['rl-gastos.html','manifest.json','src/app.css','src/app.mjs','src/icons.mjs','src/core.mjs','src/store.mjs','src/seeds.mjs','icon-32.png','icon-180.png','icon-192.png','icon-512.png'];
 const hash = createHash('sha256');
 for (const path of assets) hash.update(path).update(readFileSync(path));
 const version = hash.digest('hex').slice(0,16);
