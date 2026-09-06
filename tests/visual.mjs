@@ -9,9 +9,10 @@ const base=process.env.TEST_BASE_URL||'http://127.0.0.1:8080',out=process.env.AR
 mkdirSync(out,{recursive:true});
 const browser=await browserType.launch({headless:true,...(process.env.CHROME_EXECUTABLE?{executablePath:process.env.CHROME_EXECUTABLE}:{})});
 const report=[];
+let page;
 try {
- const context=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true,locale:'es-PY',timezoneId:'America/Asuncion',colorScheme:'light'});
- const page=await context.newPage();
+ const context=await browser.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true,locale:'es-PY',timezoneId:'America/Asuncion',colorScheme:'light',serviceWorkers:'block'});
+ page=await context.newPage();
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.clock.setFixedTime(new Date('2026-09-06T15:00:00Z'));
  await page.goto(base+'/rl-gastos.html');await page.getByRole('heading',{name:'Resumen',exact:true}).waitFor();
@@ -86,4 +87,20 @@ try {
  assert.deepEqual(errors,[]);
  writeFileSync(join(out,`${browserName}-layout-report.json`),JSON.stringify(report,null,2));
  console.log(`PASS: ${report.length} layout/interaction checks in ${browserName}: seven viewports, all screens, dark/light, native select changes, outside click, draft preservation, Escape, reduced motion, long labels, large amounts. Demo data only.`);
-}finally{await browser.close();}
+} catch(error) {
+ if(page) {
+  await page.screenshot({path:join(out,`${browserName}-failure.png`)}).catch(()=>{});
+  const debug=await page.evaluate(()=>{
+   const el=document.querySelector('main');
+   return {
+    viewport:[innerWidth,innerHeight],
+    visual:visualViewport&&{width:visualViewport.width,height:visualViewport.height,scale:visualViewport.scale},
+    main:{rect:el.getBoundingClientRect().toJSON(),scrollTop:el.scrollTop,scrollHeight:el.scrollHeight,clientHeight:el.clientHeight},
+    dialogs:[...document.querySelectorAll('dialog')].map(el=>({id:el.id,open:el.open,inert:el.inert})),
+    target:[...document.querySelectorAll('[data-action=edit]')].filter(el=>el.textContent.includes('almuerzo black 5881')).map(el=>{const r=el.getBoundingClientRect();return {rect:r.toJSON(),hit:document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.outerHTML.slice(0,150)};})
+   };
+  }).catch(()=>({}));
+  console.log('FAILURE CONTEXT',JSON.stringify(debug));
+ }
+ throw error;
+} finally { await browser.close(); }
