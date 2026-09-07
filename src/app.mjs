@@ -1,5 +1,5 @@
-import { Store, ConflictError } from './store.mjs';
-import { clone, uid, money, dayKey, monthKey, monthLabel, shiftMonth, activeEntries, entryDay, inPeriod, totals, parseLine, parseAmountToken, possibleDuplicate, saveMovement, setDeleted, makeBackup, decodeBackup, exportCSV, exportForChatGPT, validateState, validMonth } from './core.mjs';
+import { Store, ConflictError, draftVersion } from './store.mjs';
+import { clone, uid, money, dayKey, monthKey, monthLabel, shiftMonth, activeEntries, entryDay, inPeriod, totals, parseLine, parseAmountToken, possibleDuplicate, saveMovement, setDeleted, makeBackup, decodeBackup, exportCSV, exportForChatGPT, validateState, validMonth, budgetSummary, matchesMovement } from './core.mjs';
 import { MICA_SUBCATS } from './seeds.mjs';
 import { icon } from './icons.mjs';
 
@@ -10,6 +10,10 @@ const amount = n => `<span class="private">${h(money(n))}</span>`;
 document.querySelectorAll('[data-icon]').forEach(el => { el.innerHTML = icon(el.dataset.icon); });
 const store = new Store();
 let state = null, tab = 'home', selectedMonth = monthKey(), busy = false, draft = null, importCandidate = null, importRevision = null, waitingWorker = null;
+let importRecovery = false, importSnapshot = null, importRequest = 0;
+let draftToken = null, lastDraftContent = null, draftWrite = Promise.resolve(true);
+const draftContent = value => { const {draftId, token, updatedAt, conflictCopy, ...content} = value; return JSON.stringify(content); };
+function loadDraft(value) { draft = value; draftToken = draftVersion(value); lastDraftContent = value ? draftContent(value) : null; if(value?.draftId) { draftKey = value.draftId; try { sessionStorage.setItem('rl-draft-key',draftKey); } catch {} } }
 let filters = { category: '', method: '', search: '', type: '', trash: false, from: '', to: '' }, historyLimit = 60;
 const budgetDrafts = new Map();
 const budgetFingerprint = values => JSON.stringify(Object.entries(values || {}).sort(([a], [b]) => a.localeCompare(b)));
@@ -43,7 +47,7 @@ function closePanel(dialog) {
 }
 async function dismissPanel(dialog) {
   if (busy || closingPanels.has(dialog)) return;
-  if (dialog.id === 'editor') { captureEditor(); await persistDraft(); }
+  if (dialog.id === 'editor') { captureEditor(); if (!(await persistDraft())) throw new Error('No se pudo conservar el borrador. Volvé a intentar o exportalo.'); }
   if (dialog.id === 'import-dialog') importCandidate = null;
   await closePanel(dialog);
   render();
@@ -62,14 +66,14 @@ function notice(message, error = false) { clearTimeout(noticeTimer); $('notice')
 function formError(message) { const el = $('form-error'); if (el && $('editor').open) { el.textContent = message; el.scrollIntoView({ block: 'nearest' }); } else notice(message, true); }
 const catName = id => state.categories.find(c => c.id === id)?.name || id;
 const payName = id => state.paymentMethods.find(p => p.id === id)?.name || '';
-function applyTheme() { $('privacy').innerHTML = icon(state.settings.privacy ? 'hidden' : 'eye'); document.documentElement.dataset.theme = state.settings.theme; document.body.classList.toggle('privacy', state.settings.privacy); $('privacy').setAttribute('aria-label', state.settings.privacy ? 'Mostrar montos' : 'Ocultar montos en pantalla'); }
+function applyTheme() { $('privacy').innerHTML = icon(state.settings.privacy ? 'hidden' : 'eye'); document.documentElement.dataset.theme = state.settings.theme; document.body.classList.toggle('privacy', state.settings.privacy); $('privacy').setAttribute('aria-label', state.settings.privacy ? 'Mostrar montos' : 'Ocultar montos en pantalla'); document.querySelectorAll('[data-private-input]').forEach(input => { input.type = state.settings.privacy ? 'password' : 'text'; }); }
 async function commit(next, message, options = {}) {
   if (busy) return false;
   busy = true;
   const locked = [...document.querySelectorAll('button,input,select,textarea')].filter(el => !el.disabled);
   locked.forEach(el => { el.disabled = true; });
   try {
-    const result = await store.commit(next, state?.revision ?? -1, options);
+    const result = options.recoverSnapshot ? await store.recover(next, importSnapshot) : await store.commit(next, state?.revision ?? -1, options);
     state = result;
     for (const [month, pending] of budgetDrafts) {
       if (pending.draftId === options.clearDraft && pending.token === options.clearDraftToken) budgetDrafts.delete(month);
@@ -89,8 +93,7 @@ const sorted = entries => [...entries].sort((a,b) => entryDay(b).localeCompare(e
 function renderHome() {
   const entries = activeEntries(state).filter(e => inPeriod(e, { month: selectedMonth }));
   const total = totals(entries), budget = state.monthlyBudgets[selectedMonth];
-  const limit = budget ? Object.values(budget).reduce((s,n) => s + n, 0) : null;
-  const remaining = limit === null ? null : limit - total.expenses;
+  const { limit, remaining } = budgetSummary(entries, budget);
   const byCat = new Map(); entries.filter(e => e.type === 'expense').forEach(e => byCat.set(e.categoryId, (byCat.get(e.categoryId) || 0) + e.amount));
   const categories = [...byCat].sort((a,b) => b[1] - a[1]);
   const prev = shiftMonth(selectedMonth, -1), reviewed = state.reviewedMonths.includes(selectedMonth);
@@ -109,8 +112,8 @@ function renderHome() {
           <div class="row"><span class="eyebrow">Gastos del mes</span><span class="pill">${movementCount(total.count)}</span></div>
           <div class="amount private">${h(money(total.expenses))}</div>
           <div class="hero-footer">
-            <div><span class="muted">Presupuesto restante</span><strong class="${remaining !== null && remaining < 0 ? 'danger' : ''}">${remaining === null ? 'Sin definir' : amount(remaining)}</strong></div>
-            <div><span class="muted">${limit === null ? 'Presupuesto' : 'Límite del mes'}</span><strong>${limit === null ? '<button class="link-button" data-action="nav" data-tab="budgets">Definir →</button>' : amount(limit)}</strong></div>
+            <div><span class="muted">Restante en categorías con límite</span><strong class="${remaining !== null && remaining < 0 ? 'danger' : ''}">${remaining === null ? 'Sin definir' : amount(remaining)}</strong></div>
+            <div><span class="muted">${limit === null ? 'Presupuesto' : 'Límites definidos'}</span><strong>${limit === null ? '<button class="link-button" data-action="nav" data-tab="budgets">Definir →</button>' : amount(limit)}</strong></div>
           </div>
         </section>
         <div class="status-line"><span class="status-dot"></span><span>Guardado en este dispositivo</span><span aria-hidden="true">·</span><span>${reviewed ? 'Mes revisado' : 'Mes por revisar'}</span></div>
@@ -130,13 +133,14 @@ function renderHome() {
     </div>`;
 }
 function filteredHistory() {
-  return sorted(state.entries.filter(e => (!!e.deletedAt === filters.trash) && inPeriod(e, { month: filters.from || filters.to ? undefined : selectedMonth, from: filters.from, to: filters.to }) && (!filters.category || e.categoryId === filters.category) && (!filters.method || e.paymentMethodId === filters.method) && (!filters.type || e.type === filters.type) && (!filters.search || `${e.note} ${e.raw} ${catName(e.categoryId)} ${payName(e.paymentMethodId)} ${e.amount}`.toLocaleLowerCase('es').includes(filters.search.toLocaleLowerCase('es')))));
+  return sorted(state.entries.filter(e => (!!e.deletedAt === filters.trash) && inPeriod(e, { month: filters.from || filters.to ? undefined : selectedMonth, from: filters.from, to: filters.to }) && (!filters.category || e.categoryId === filters.category) && (!filters.method || e.paymentMethodId === filters.method) && (!filters.type || e.type === filters.type) && matchesMovement(e, filters.search, catName(e.categoryId), payName(e.paymentMethodId))));
 }
 const options = (list, selected, placeholder = 'Elegir…') => `<option value="">${placeholder}</option>` + list.map(c => `<option value="${h(c.id)}" ${c.id === selected ? 'selected' : ''}>${h(c.name)}${c.active === false ? ' (archivada)' : ''}</option>`).join('');
 function historyList() {
+  if (filters.from && filters.to && filters.from > filters.to) return '<p class="form-error" role="alert">La fecha Desde debe ser anterior o igual a Hasta.</p>';
   const entries = filteredHistory(), total = totals(entries), groups = new Map();
   entries.slice(0,historyLimit).forEach(e => { const d = entryDay(e); if (!groups.has(d)) groups.set(d,[]); groups.get(d).push(e); });
-  return `<div class="status-line">${movementCount(total.count)} · Gastos ${amount(total.expenses)}${total.income ? ' · Ingresos ' + amount(total.income) : ''}${filters.trash ? ' · Papelera' : ''}</div>` + (entries.length ? [...groups].map(([day,items]) => `<div class="day-heading">${h(day.split('-').reverse().join('/'))}</div><div class="card">${rows(items,{ trash:filters.trash })}</div>`).join('') : rows([])) + (entries.length > historyLimit ? '<button class="button wide" data-action="more">Mostrar más</button>' : '');
+  return `<div class="status-line">${movementCount(total.count)} · Gastos ${amount(total.expenses)}${total.income ? ' · Ingresos ' + amount(total.income) : ''}${filters.trash ? ' · Papelera' : ''}</div>` + (entries.length ? [...groups].map(([day,items]) => `<div class="day-heading">${h(day.split('-').reverse().join('/'))}</div><div class="card">${rows(items,{ trash:filters.trash })}</div>`).join('') : rows([], {trash:filters.trash})) + (entries.length > historyLimit ? '<button class="button wide" data-action="more">Mostrar más</button>' : '');
 }
 function renderHistory() {
   return title('Movimientos') + monthNav() + `<div class="filters"><input class="full" id="search" aria-label="Buscar movimientos" placeholder="Descripción, categoría o monto" value="${h(filters.search)}"><select id="filter-category" aria-label="Filtrar categoría">${options(state.categories,filters.category,'Todas las categorías')}</select><select id="filter-method" aria-label="Filtrar medio">${options(state.paymentMethods,filters.method,'Todos los medios')}</select><select id="filter-type" aria-label="Filtrar tipo"><option value="">Gastos e ingresos</option><option value="expense" ${filters.type === 'expense' ? 'selected' : ''}>Gastos</option><option value="income" ${filters.type === 'income' ? 'selected' : ''}>Ingresos</option></select><button class="button" data-action="trash">${filters.trash ? 'Ver activos' : 'Papelera'}</button></div><details><summary>Rango de fechas</summary><div class="form-row"><label>Desde<input type="date" id="filter-from" value="${filters.from}"></label><label>Hasta<input type="date" id="filter-to" value="${filters.to}"></label></div><button class="link-button" data-action="clear-filters">Restablecer filtros y volver al mes</button></details><div id="history-list">${historyList()}</div>`;
@@ -196,7 +200,7 @@ function renderBudgets() {
     <div class="hint">${known ? 'Estos límites pertenecen solo a ' + h(monthLabel(selectedMonth)) + '.' : 'Este mes no tiene presupuesto definido.'}</div>
     <form id="budget-form" data-month="${selectedMonth}" data-base="${h(base)}">
       <div class="card">
-        ${state.categories.filter(c => c.type === 'expense' && (c.active !== false || values?.[c.id] !== undefined)).map(c => `<div class="budget-row"><label for="budget-${h(c.id)}">${h(c.name)}${c.active === false ? ' (archivada)' : ''}</label><input id="budget-${h(c.id)}" name="${h(c.id)}" inputmode="numeric" aria-label="Presupuesto ${h(c.name)}" value="${h(values?.[c.id] ?? '')}" placeholder="Sin límite"></div>`).join('')}
+        ${state.categories.filter(c => c.type === 'expense' && (c.active !== false || values?.[c.id] !== undefined)).map(c => `<div class="budget-row"><label for="budget-${h(c.id)}">${h(c.name)}${c.active === false ? ' (archivada)' : ''}</label><input id="budget-${h(c.id)}" name="${h(c.id)}" data-private-input type="${state.settings.privacy ? 'password' : 'text'}" inputmode="numeric" aria-label="Presupuesto ${h(c.name)}" value="${h(values?.[c.id] ?? '')}" placeholder="Sin límite"></div>`).join('')}
         <p class="small muted">Vacío o cero: sin límite en esa categoría. El total es la suma de los límites definidos.</p>
         <div class="row"><strong>Total</strong><strong id="budget-total">${amount(budgetTotal(values))}</strong></div>
       </div>
@@ -212,19 +216,31 @@ function renderExport() {
   return title('Exportar', 'Archivos para ChatGPT, Excel y respaldo.') + monthNav() + '<button class="link-button" data-action="share-file">Compartir el último archivo generado →</button>' + `<div class="grid"><div class="stack"><section class="hero"><div class="eyebrow">${h(monthLabel(selectedMonth))}</div><div class="amount private">${h(money(total.expenses))}</div><p>${movementCount(total.count)} · Gastos del período</p><button class="button primary wide" data-action="chatgpt">Exportar para ChatGPT</button><p class="small muted">JSON con historial completo, selección del mes, IDs, revisiones y totales de control. Incluye la papelera para conciliar eliminaciones.</p></section><div class="card"><h2>CSV para Excel</h2><p class="muted">Columnas estables y montos numéricos en guaraníes. Contiene movimientos activos.</p><div class="actions"><button class="button" data-action="csv-month">Este mes</button><button class="button" data-action="csv-all">Todo el historial</button></div></div></div><div class="stack"><div class="card"><h2>Backup completo</h2><p class="muted">Conserva movimientos, papelera, favoritos, categorías y presupuestos. Guardalo en Archivos o iCloud.</p><button class="button wide" data-action="backup">Generar backup JSON</button><p class="small muted">Generar el archivo no confirma que quedó guardado fuera de la app.</p><button class="link-button" data-action="import">Restaurar un backup →</button></div><div class="card"><h2>Cómo llevarlo al Excel</h2><p>1. Exportá para ChatGPT.</p><p>2. Adjuntá el JSON y tu Excel.</p><p>3. Pedí conciliar por ID y verificar los totales.</p><div class="hint">Revisá los totales y las fórmulas del Excel antes de reemplazar el archivo original.</div></div><button class="link-button" data-action="print">Imprimir resumen del mes</button></div></div>`;
 }
 function render() { if (!state) return; $('main').innerHTML = `<div class="page-view">${({ home:renderHome, history:renderHistory, budgets:renderBudgets, export:renderExport })[tab]()}</div>`; document.querySelectorAll('.bottom-nav button').forEach(b => { if (b.dataset.tab === tab) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current'); }); }
-function navigate(next) { tab = next; historyLimit = 60; render(); $('main').scrollTo({ top:0 }); if (!matchMedia('(prefers-reduced-motion: reduce)').matches) $('main').firstElementChild.animate([{opacity:.4},{opacity:1}],{duration:220,easing:'ease-in-out'}); }
+function navigate(next) { tab = next; historyLimit = 60; render(); $('main').scrollTo({ top:0 }); $('main').focus({preventScroll:true}); if (!matchMedia('(prefers-reduced-motion: reduce)').matches) $('main').firstElementChild.animate([{opacity:.4},{opacity:1}],{duration:220,easing:'ease-in-out'}); }
 
 function blankEntry() { return { id:uid(), amount:null, note:'', raw:'', categoryId:'', paymentMethodId:'', occurredOn:dayKey(), type:'expense', subcategory:'' }; }
 async function persistDraft() {
-  if (!draft) return;
-  const value = { ...clone(draft), draftId:draftKey, updatedAt:new Date().toISOString() };
-  try { await store.draft(value,draftKey); const el = $('draft-status'); if (el) el.textContent = 'Borrador guardado en este dispositivo'; }
-  catch { const el = $('draft-status'); if (el) { el.textContent = 'No se pudo guardar el borrador. Exportalo antes de cerrar.'; el.classList.add('danger'); } }
+  if (!draft) return true;
+  const content = draftContent(draft);
+  if (content === lastDraftContent) return draftWrite;
+  const expected = draftToken, token = uid();
+  const value = { ...clone(draft), draftId:draftKey, token, updatedAt:new Date().toISOString() };
+  lastDraftContent = content; draftToken = token;
+  // Transactions start immediately on input, before the browser can suspend us.
+  draftWrite = store.saveEntryDraft(value,draftKey,expected).then(() => {
+    const el = $('draft-status'); if (el) el.textContent = 'Borrador guardado en este dispositivo'; return true;
+  }).catch(() => {
+    if (draftToken === token) { lastDraftContent = null; draftToken = expected; }
+    const el = $('draft-status');
+    if (el) { el.textContent = 'No se pudo guardar el borrador. Exportalo antes de cerrar.'; el.classList.add('danger'); }
+    return false;
+  });
+  return draftWrite;
 }
 function captureEditor() {
-  if (!draft) return;
-  if (draft.mode === 'quick') { draft.text = $('quick-text')?.value || ''; draft.type = $('quick-type')?.value || 'expense'; }
-  else draft.items = [...document.querySelectorAll('[data-entry-form]')].map((form,i) => { const get = name => form.querySelector(`[name="${name}"]`).value; return { ...draft.items[i], amount:parseAmountToken(get('amount')), amountText:get('amount'), note:get('note'), categoryId:get('category'), paymentMethodId:get('type') === 'income' ? null : get('method'), occurredOn:get('day'), type:get('type'), subcategory:get('subcategory') }; });
+  if (!draft || !$('editor').open || $('editor-content').dataset.draftKey !== draftKey) return;
+  if (draft.mode === 'quick') { if (!$('quick-text')) return; draft.text = $('quick-text').value; draft.type = $('quick-type').value; }
+  else if (document.querySelector('[data-entry-form]')) draft.items = [...document.querySelectorAll('[data-entry-form]')].map((form,i) => { const get = name => form.querySelector(`[name="${name}"]`).value; return { ...draft.items[i], amount:parseAmountToken(get('amount')), amountText:get('amount'), note:get('note'), categoryId:get('category'), paymentMethodId:get('type') === 'income' ? null : get('method'), occurredOn:get('day'), type:get('type'), subcategory:get('subcategory') }; });
 }
 function openEditor(existing = null, repeat = false) {
   if (!state) return;
@@ -237,11 +253,12 @@ function openEditor(existing = null, repeat = false) {
   persistDraft();
 }
 function entryForm(item,index) {
-  return `<div class="batch-row" data-entry-form="${index}">${draft.items.length > 1 ? `<div class="row"><h3>Movimiento ${index+1}</h3><button class="link-button" data-action="remove-batch" data-index="${index}">Quitar</button></div>` : ''}<label>Monto en guaraníes<input class="amount-input" name="amount" inputmode="numeric" placeholder="0" value="${h(item.amountText ?? item.amount ?? '')}" required></label><label>Descripción<input name="note" maxlength="10000" placeholder="¿En qué fue?" value="${h(item.note)}"></label><div class="form-row"><label>Tipo<select name="type"><option value="expense" ${item.type==='expense'?'selected':''}>Gasto</option><option value="income" ${item.type==='income'?'selected':''}>Ingreso</option></select></label><label>Fecha<input type="date" name="day" value="${h(item.occurredOn)}" required></label></div><label>Categoría<select name="category" required>${options(state.categories.filter(c => c.type === item.type && (c.active!==false || c.id===item.categoryId)),item.categoryId,'Elegí una categoría')}</select></label><label ${item.type==='income'?'hidden':''}>Medio de pago<select name="method" ${item.type==='income'?'':'required'}>${options(state.paymentMethods.filter(p => p.active!==false || p.id===item.paymentMethodId),item.paymentMethodId,'Elegí cómo pagaste')}</select></label><label ${item.categoryId==='cat_salida_mica'?'':'hidden'}>Detalle de Salida Mica<select name="subcategory"><option value="">Sin detalle</option>${MICA_SUBCATS.map(s => `<option value="${s.id}" ${s.id===item.subcategory?'selected':''}>${h(s.label)}</option>`).join('')}${item.subcategory && !MICA_SUBCATS.some(s=>s.id===item.subcategory)?`<option selected value="${h(item.subcategory)}">${h(item.subcategory)}</option>`:''}</select></label>${possibleDuplicate(state,item,draft.editId) ? '<p class="warning small">Hay un movimiento similar. Podés guardarlo si es otro gasto.</p>' : ''}</div>`;
+  return `<div class="batch-row" data-entry-form="${index}">${draft.items.length > 1 ? `<div class="row"><h3>Movimiento ${index+1}</h3><button type="button" class="link-button" data-action="remove-batch" data-index="${index}">Quitar</button></div>` : ''}<label>Monto en guaraníes<input class="amount-input" data-private-input type="${state.settings.privacy ? 'password' : 'text'}" name="amount" inputmode="numeric" placeholder="0" value="${h(item.amountText ?? item.amount ?? '')}" required></label><label>Descripción<input name="note" maxlength="10000" placeholder="¿En qué fue?" value="${h(item.note)}"></label><div class="form-row"><label>Tipo<select name="type"><option value="expense" ${item.type==='expense'?'selected':''}>Gasto</option><option value="income" ${item.type==='income'?'selected':''}>Ingreso</option></select></label><label>Fecha<input type="date" name="day" value="${h(item.occurredOn)}" required></label></div><label>Categoría<select name="category" required>${options(state.categories.filter(c => c.type === item.type && (c.active!==false || c.id===item.categoryId)),item.categoryId,'Elegí una categoría')}</select></label><label ${item.type==='income'?'hidden':''}>Medio de pago<select name="method" ${item.type==='income'?'':'required'}>${options(state.paymentMethods.filter(p => p.active!==false || p.id===item.paymentMethodId),item.paymentMethodId,'Elegí cómo pagaste')}</select></label><label ${item.categoryId==='cat_salida_mica'?'':'hidden'}>Detalle de Salida Mica<select name="subcategory"><option value="">Sin detalle</option>${MICA_SUBCATS.map(s => `<option value="${s.id}" ${s.id===item.subcategory?'selected':''}>${h(s.label)}</option>`).join('')}${item.subcategory && !MICA_SUBCATS.some(s=>s.id===item.subcategory)?`<option selected value="${h(item.subcategory)}">${h(item.subcategory)}</option>`:''}</select></label>${possibleDuplicate(state,item,draft.editId) ? '<p class="warning small">Hay un movimiento similar. Podés guardarlo si es otro gasto.</p>' : ''}</div>`;
 }
 function renderEditor() {
   const quick = draft.mode === 'quick';
-  $('editor-content').innerHTML = `<div class="dialog-top"><h2 id="editor-title">${draft.editId ? 'Editar movimiento' : 'Registrar'}</h2><button class="icon-button" data-action="close-editor" aria-label="Cerrar y conservar borrador">${icon('close')}</button></div><div id="form-error" class="form-error" role="alert"></div><button id="reload-data" hidden class="button" data-action="reload">Recargar datos guardados</button>${quick ? `<p class="muted">Empezá por el monto. Revisás todo antes de guardar.</p><label>Tipo<select id="quick-type"><option value="expense" ${draft.type==='expense'?'selected':''}>Gasto</option><option value="income" ${draft.type==='income'?'selected':''}>Ingreso</option></select></label><label>Uno o varios movimientos<textarea id="quick-text" rows="4" placeholder="85.500 almuerzo itaú black&#10;200k ropa atlas">${h(draft.text)}</textarea></label><div class="actions"><button class="button primary" data-action="parse">Revisar registros</button><button class="button" data-action="manual">Usar formulario</button></div>` : `<form id="movement-form">${draft.items.map(entryForm).join('')}<div class="dialog-footer"><button class="button primary wide" type="submit" data-write>${draft.editId ? 'Guardar cambios' : 'Guardar ' + (draft.items.length > 1 ? draft.items.length + ' movimientos' : 'movimiento')}</button></div></form>`}<div id="draft-status" class="draft-status"></div><div class="actions"><button class="link-button" data-action="export-draft">Exportar borrador</button><button class="link-button danger" data-action="discard-draft">Descartar borrador</button></div>${draft.editId ? `<div class="actions"><button class="button" data-action="favorite" data-id="${h(draft.editId)}" data-write>${state.favorites.includes(draft.editId)?'Quitar favorito':'Guardar favorito'}</button><button class="button danger" data-action="delete" data-id="${h(draft.editId)}" data-write>Enviar a papelera</button></div><p class="small muted">ID ${h(draft.editId)} · Revisión ${draft.editVersion}</p>` : ''}`;
+  $('editor-content').dataset.draftKey = draftKey;
+  $('editor-content').innerHTML = `<div class="dialog-top"><h2 id="editor-title">${draft.editId ? 'Editar movimiento' : 'Registrar'}</h2><button class="icon-button" data-action="close-editor" aria-label="Cerrar y conservar borrador">${icon('close')}</button></div><div id="form-error" class="form-error" role="alert"></div>${state.settings.privacy ? '<p class="hint">Los montos están ocultos. <button class="link-button" data-action="reveal-amounts">Mostrar montos para editar</button></p>' : ''}<button id="reload-data" hidden class="button" data-action="reload">Recargar datos guardados</button>${quick ? `<p class="muted">Empezá por el monto. Revisás todo antes de guardar.</p><label>Tipo<select id="quick-type"><option value="expense" ${draft.type==='expense'?'selected':''}>Gasto</option><option value="income" ${draft.type==='income'?'selected':''}>Ingreso</option></select></label><label>Uno o varios movimientos<textarea class="private" id="quick-text" rows="4" placeholder="85.500 almuerzo itaú black&#10;200k ropa atlas">${h(draft.text)}</textarea></label><div class="actions"><button class="button primary" data-action="parse">Revisar registros</button><button class="button" data-action="manual">Usar formulario</button></div>` : `<form id="movement-form">${draft.items.map(entryForm).join('')}<div class="dialog-footer"><button class="button primary wide" type="submit" data-write>${draft.editId ? 'Guardar cambios' : 'Guardar ' + (draft.items.length > 1 ? draft.items.length + ' movimientos' : 'movimiento')}</button></div></form>`}<div id="draft-status" class="draft-status"></div><div class="actions"><button class="link-button" data-action="export-draft">Exportar borrador</button><button class="link-button danger" data-action="discard-draft">Descartar borrador</button></div>${draft.editId ? `<div class="actions"><button class="button" data-action="favorite" data-id="${h(draft.editId)}" data-write>${state.favorites.includes(draft.editId)?'Quitar favorito':'Guardar favorito'}</button><button class="button danger" data-action="delete" data-id="${h(draft.editId)}" data-write>Enviar a papelera</button></div><p class="small muted">ID ${h(draft.editId)} · Revisión ${draft.editVersion}</p>` : ''}`;
 }
 function assertEditedMovementCurrent() {
   if (draft.editId && (state.entries.find(e => e.id === draft.editId)?.version !== draft.editVersion || (draft.original && JSON.stringify(state.entries.find(e => e.id === draft.editId)) !== JSON.stringify(draft.original)))) throw new Error('Este movimiento cambió mientras lo editabas. Exportá el borrador y abrí la versión actual para comparar.');
@@ -251,6 +268,9 @@ async function submitMovements() {
   captureEditor();
   try {
     assertEditedMovementCurrent();
+    if (!draft.items?.length) throw new Error('El borrador no contiene movimientos para guardar.');
+    if (!(await persistDraft())) throw new Error('No se pudo conservar el borrador. Volvé a intentar antes de guardar.');
+    assertEditedMovementCurrent(); // Another tab may have committed while the draft write was pending.
     let candidate = state, duplicate = false;
     for (const item of draft.items) {
       if (item.occurredOn > dayKey()) throw new Error('Usá la fecha de un gasto realizado. Los gastos futuros no se registran como realizados.');
@@ -260,7 +280,7 @@ async function submitMovements() {
       candidate = saveMovement(candidate,clean,draft.editId);
     }
     if (duplicate && !confirm('Hay movimientos similares por fecha, monto, categoría y medio. ¿Confirmás que son gastos distintos?')) return;
-    if (await commit(candidate,'Guardado en este dispositivo.',{ clearDraft:draftKey })) { draft = null; await closePanel($('editor')); render(); }
+    if (await commit(candidate,'Guardado en este dispositivo.',{ clearDraft:draftKey, clearDraftToken:draftToken })) { draft = null; await closePanel($('editor')); render(); }
   } catch (e) { formError(e.message); }
 }
 
@@ -282,11 +302,16 @@ function settingsHTML() {
 function configRow(c,kind) { return `<div class="config-item"><div class="row"><span>${h(c.name)} <small class="muted">${c.active===false?'Archivada':''}</small></span><button class="link-button" data-action="config-edit" data-id="${h(c.id)}" data-kind="${kind}">Editar</button></div><button class="link-button" data-action="archive" data-write data-id="${h(c.id)}" data-kind="${kind}">${c.active===false?'Reactivar':'Archivar'}</button></div>`; }
 function showSettings() { $('settings-content').innerHTML=settingsHTML(); if (!$('settings').open) openPanel($('settings')); }
 async function prepareImport(file) {
+  const request = ++importRequest; importCandidate = null;
   try {
-    if (file.size > 25000000) throw new Error('El archivo supera 25 MB. No se importó nada.');
-    importCandidate = decodeBackup(JSON.parse(await file.text())); importRevision = state?.revision ?? -1;
+    if (file.size > 25000000) notice('Validando un backup grande. Tus datos actuales se conservan hasta confirmar la restauración.');
+    const candidate = decodeBackup(JSON.parse(await file.text()));
+    if (request !== importRequest) return;
+    const snapshot = state ? null : await store.read();
+    if (request !== importRequest) return;
+    importCandidate = candidate; importRevision = state?.revision ?? -1; importRecovery = !state; importSnapshot = snapshot;
     const total=totals(activeEntries(importCandidate)), existing=state ? totals(activeEntries(state)) : { count:0 };
-    $('import-content').innerHTML=`<div class="dialog-top"><h2 id="import-title">Revisar restauración</h2><button class="icon-button" data-action="close-import" aria-label="Cancelar importación">${icon('close')}</button></div><p>Archivo: ${h(file.name)}</p><div class="card"><p><strong>${movementCount(total.count)} ${total.count === 1 ? 'activo' : 'activos'}</strong></p><p>Gastos ${amount(total.expenses)}</p><p>Ingresos ${amount(total.income)}</p><p>${importCandidate.entries.filter(e=>e.deletedAt).length} en papelera</p></div><div class="hint">Reemplazará los ${existing.count} movimientos actuales. Antes se guardará una copia interna del estado actual, dentro de la misma transacción. No fusiona historiales.</div><div id="import-error" class="form-error" role="alert"></div><button class="button primary wide" data-write data-action="confirm-import">Restaurar este backup</button>`;
+    $('import-content').innerHTML=`<div class="dialog-top"><h2 id="import-title">Revisar restauración</h2><button class="icon-button" data-action="close-import" aria-label="Cancelar importación">${icon('close')}</button></div><p>Archivo: ${h(file.name)}</p><div class="card"><p><strong>${movementCount(total.count)} ${total.count === 1 ? 'activo' : 'activos'}</strong></p><p>Gastos ${amount(total.expenses)}</p><p>Ingresos ${amount(total.income)}</p><p>${importCandidate.entries.filter(e=>e.deletedAt).length} en papelera</p></div><div class="hint">${importRecovery ? 'Reemplazará el estado que no se pudo abrir.' : 'Reemplazará los ' + existing.count + ' movimientos actuales.'} Antes se guardará una copia interna del estado actual, dentro de la misma transacción. No fusiona historiales.</div><div id="import-error" class="form-error" role="alert"></div><button class="button primary wide" data-write data-action="confirm-import">Restaurar este backup</button>`;
     openPanel($('import-dialog'));
   } catch(e) { notice(e.message || 'Archivo inválido.',true); }
   finally { $('import-file').value=''; }
@@ -309,7 +334,19 @@ document.addEventListener('change', async e=>{
     if (e.target.closest('#budget-form')) captureBudgetForm();
     if (e.target.id==='month') { if (validMonth(e.target.value)) { selectedMonth=e.target.value; filters.from=''; filters.to=''; render(); } }
     if (e.target.id.startsWith('filter-')) { const key={ 'filter-category':'category','filter-method':'method','filter-type':'type','filter-from':'from','filter-to':'to' }[e.target.id]; filters[key]=e.target.value; historyLimit=60; $('history-list').innerHTML=historyList(); }
-    if (e.target.closest('#editor') && ['type','category'].includes(e.target.name)) { captureEditor(); const item=draft.items[Number(e.target.closest('[data-entry-form]').dataset.entryForm)]; if(e.target.name==='type'){item.categoryId='';item.paymentMethodId=item.type==='income'?null:'';} renderEditor(); persistDraft(); }
+    if (e.target.closest('#editor') && ['type','category'].includes(e.target.name)) {
+      captureEditor(); const row=e.target.closest('[data-entry-form]'), item=draft.items[Number(row.dataset.entryForm)];
+      if(e.target.name==='type') {
+        item.categoryId=''; item.paymentMethodId=item.type==='income'?null:'';
+        row.querySelector('[name=category]').innerHTML=options(state.categories.filter(c=>c.type===item.type && c.active!==false),'','Elegí una categoría');
+        const method=row.querySelector('[name=method]'); method.innerHTML=options(state.paymentMethods.filter(p=>p.active!==false),'','Elegí cómo pagaste'); method.required=item.type!=='income'; method.closest('label').hidden=item.type==='income';
+      }
+      row.querySelector('[name=subcategory]').closest('label').hidden=item.categoryId!=='cat_salida_mica';
+      row.querySelector('.warning')?.remove();
+      if(possibleDuplicate(state,item,draft.editId)) row.insertAdjacentHTML('beforeend','<p class="warning small">Hay un movimiento similar. Podés guardarlo si es otro gasto.</p>');
+      // Keep this row, native select and focus mounted while dependencies change.
+      persistDraft();
+    }
     if(e.target.id==='theme'){const next=clone(state);next.settings.theme=e.target.value;await commit(next,'Apariencia guardada.');}
     if(e.target.id==='import-file' && e.target.files[0]) await prepareImport(e.target.files[0]);
   }catch(err){notice(err.message,true);}
@@ -326,19 +363,20 @@ document.addEventListener('click',async e=>{
   const button=e.target.closest('[data-action]'); if(!button || button.disabled) return;
   const { action,id }=button.dataset;
   try {
+    if(action==='reveal-amounts'){const next=clone(state);next.settings.privacy=false;if(await commit(next,''))renderEditor();}
     if(action==='nav') navigate(button.dataset.tab);
     if(action==='retry') location.reload();
     if(action==='month'){selectedMonth=shiftMonth(selectedMonth,Number(button.dataset.delta));filters.from='';filters.to='';render();}
     if(action==='add'||action==='resume') openEditor();
     if(action==='edit'||action==='repeat') openEditor(state.entries.find(x=>x.id===id),action==='repeat');
-    if(action==='close-editor'){captureEditor();await persistDraft();await closePanel($('editor'));render();}
+    if(action==='close-editor'){captureEditor();if(!(await persistDraft()))throw new Error('No se pudo conservar el borrador. Volvé a intentar o exportalo.');await closePanel($('editor'));render();}
     if(action==='manual'){captureEditor();draft={mode:'form',editId:null,items:[{...blankEntry(),...parseLine(draft.text||'',state,draft.type||'expense')}]};renderEditor();persistDraft();}
     if(action==='parse'){captureEditor();const lines=draft.text.split('\n').map(l=>l.trim()).filter(Boolean);if(!lines.length)throw new Error('Escribí un monto y una descripción.');if(lines.length>100)throw new Error('Revisemos hasta 100 movimientos por carga.');draft={mode:'form',editId:null,items:lines.map(line=>({...blankEntry(),...parseLine(line,state,draft.type)}))};renderEditor();persistDraft();}
     if(action==='remove-batch'){captureEditor();draft.items.splice(Number(button.dataset.index),1);if(!draft.items.length)draft={mode:'quick',text:'',type:'expense'};renderEditor();persistDraft();}
-    if(action==='discard-draft' && confirm('¿Descartar este borrador? Los movimientos guardados no cambian.')){await store.draft(null,draftKey);draft=null;await closePanel($('editor'));render();}
+    if(action==='discard-draft' && confirm('¿Descartar este borrador? Los movimientos guardados no cambian.')){await store.draft(null,draftKey,draftToken);draft=null;await closePanel($('editor'));render();}
     if(action==='export-draft'){captureEditor();download(JSON.stringify({app:'RL Gastos',kind:'draft',draft},null,2),'rl_gastos_borrador.json','application/json');}
     if(action==='reload'){await refreshData();$('reload-data').hidden=true;}
-    if(action==='delete'){assertEditedMovementCurrent();if(await commit(setDeleted(state,id,true),'Movimiento enviado a papelera.',{clearDraft:draftKey})){draft=null;await closePanel($('editor'));render();}}
+    if(action==='delete'){assertEditedMovementCurrent();if(await commit(setDeleted(state,id,true),'Movimiento enviado a papelera.',{clearDraft:draftKey,clearDraftToken:draftToken})){draft=null;await closePanel($('editor'));render();}}
     if(action==='restore') await commit(setDeleted(state,id,false),'Movimiento restaurado.');
     if(action==='favorite'){const next=clone(state);next.favorites=next.favorites.includes(id)?next.favorites.filter(x=>x!==id):[...next.favorites,id];if(await commit(next,'Favoritos actualizados.'))renderEditor();}
     if(action==='category'){filters={category:id,method:'',search:'',type:'expense',trash:false,from:'',to:''};navigate('history');}
@@ -355,16 +393,16 @@ document.addEventListener('click',async e=>{
     if(action==='close-settings')await closePanel($('settings'));
     if(action==='import')$('import-file').click();
     if(action==='close-import'){await closePanel($('import-dialog'));importCandidate=null;}
-    if(action==='confirm-import'&&importCandidate){if((state?.revision??-1)!==importRevision)throw new Error('Los datos cambiaron desde la vista previa. Volvé a seleccionar el backup para revisar la restauración.');if(await commit(importCandidate,'Backup restaurado.',{recovery:true})){importCandidate=null;await closePanel($('import-dialog'));await closePanel($('settings'));selectedMonth=monthKey();render();}else $('import-error').textContent=$('notice').textContent;}
+    if(action==='confirm-import'&&importCandidate){if((state?.revision??-1)!==importRevision)throw new Error('Los datos cambiaron desde la vista previa. Volvé a seleccionar el backup para revisar la restauración.');if(await commit(importCandidate,'Backup restaurado.',{recovery:true,recoverSnapshot:importRecovery})){importCandidate=null;await closePanel($('import-dialog'));await closePanel($('settings'));selectedMonth=monthKey();render();}else $('import-error').textContent=$('notice').textContent;}
     if(action==='archive'){const next=clone(state),list=button.dataset.kind==='category'?next.categories:next.paymentMethods,c=list.find(c=>c.id===id);if(c.active!==false && list.filter(x=>x.active!==false && x.type===c.type).length<=1)throw new Error('Conservá al menos una opción activa de este tipo.');c.active=c.active===false;c.updatedAt=new Date().toISOString();if(await commit(next,'Estado actualizado.'))showSettings();}
     if(action==='config-edit'){const c=(button.dataset.kind==='category'?state.categories:state.paymentMethods).find(c=>c.id===id);$('config-id').value=id;$('config-name').value=c.name;$('config-kind').value=c.type||'method';$('config-kind').disabled=true;$('config-keywords').value=(c.keywords||[]).join(', ');$('config-name').focus();}
     if(action==='persistent'){const granted=await navigator.storage?.persist?.();notice(granted?'El navegador concedió conservación del almacenamiento. Mantené igualmente un backup.':'El navegador no concedió conservación adicional. Guardá un backup externo.');}
     if(action==='share-file'){if(!latestFile)throw new Error('Generá primero el archivo que querés compartir.');if(navigator.canShare?.({files:[latestFile]}))await navigator.share({files:[latestFile],title:'RL Gastos'});else notice('Compartir no está disponible aquí. Usá el archivo descargado.');}
     if(action==='recoveries'){const list=await store.recoveries();$('recoveries-list').innerHTML=list.map((r,i)=>`<button class="link-button" data-action="recovery-download" data-index="${i}">${h(r.reason)} · ${h(dayKey(r.at))} · Descargar</button>`).join('')||'Sin copias internas.';}
-    if(action==='recovery-download'){const list=await store.recoveries();download(JSON.stringify(makeBackup(list[Number(button.dataset.index)].state),null,2),'rl_gastos_recuperacion.json','application/json');}
-    if(action==='drafts'){const list=await store.drafts();$('drafts-list').innerHTML=list.map((d,i)=>`<button class="link-button" data-action="draft-load" data-index="${i}">Borrador ${h(d.updatedAt?.slice(0,16)||'')} · Abrir</button>`).join('')||'Sin borradores.';}
-    if(action==='draft-load'){const list=await store.drafts();draft=list[Number(button.dataset.index)];draftKey=draft.draftId||draftKey;await closePanel($('settings'));openEditor();}
-    if(action==='update'){if(busy)throw new Error('Esperá a que termine el guardado.');if(draft){captureEditor();await store.draft(draft,draftKey);}requestedUpdate=true;if(waitingWorker)waitingWorker.postMessage({type:'SKIP_WAITING'});else location.reload();}
+    if(action==='recovery-download'){const list=await store.recoveries(),item=list[Number(button.dataset.index)];let payload;try{payload=makeBackup(item.state);}catch{payload={app:'RL Gastos',kind:'recovery-raw',reason:item.reason,at:item.at,data:item.state};}download(JSON.stringify(payload,null,2),'rl_gastos_recuperacion.json','application/json');}
+    if(action==='drafts'){const list=await store.drafts();$('drafts-list').innerHTML=list.map((d,i)=>`<button class="link-button" data-action="draft-load" data-index="${i}">${d.conflictCopy ? 'Copia conservada de otra pestaña' : 'Borrador'} ${h(d.updatedAt?.slice(0,16)||'')} · Abrir</button>`).join('')||'Sin borradores.';}
+    if(action==='draft-load'){const list=await store.drafts();loadDraft(list[Number(button.dataset.index)]);await closePanel($('settings'));openEditor();}
+    if(action==='update'){if(busy)throw new Error('Esperá a que termine el guardado.');if(draft){captureEditor();if(!(await persistDraft()))throw new Error('No se pudo conservar el borrador. Volvé a intentar actualizar.');}requestedUpdate=true;if(waitingWorker)waitingWorker.postMessage({type:'SKIP_WAITING'});else location.reload();}
     if(action==='print'){const entries=activeEntries(state).filter(e=>inPeriod(e,{month:selectedMonth}));const t=totals(entries);$('main').innerHTML=title('Extracto mensual',h(monthLabel(selectedMonth)))+`<p>${movementCount(t.count)} · Gastos ${amount(t.expenses)} · Ingresos ${amount(t.income)}</p><div class="card">${rows(sorted(entries))}</div>`;window.print();render();}
   }catch(err){if(err.name!=='AbortError')formError(err.message);}
 });
@@ -379,6 +417,7 @@ async function start() {
     for (const pending of await store.drafts('budget')) {
       if (validMonth(pending.month) && pending.values && typeof pending.base === 'string') budgetDrafts.set(pending.month, pending);
     }
+    loadDraft(draft);
     render();
     const last=state.settings.lastBackupGenerated;
     if(activeEntries(state).length && (!last || Date.now()-Date.parse(last)>7*86400000))notice('Backup pendiente. Generá una copia en Exportar.');

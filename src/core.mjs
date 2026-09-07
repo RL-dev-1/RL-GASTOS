@@ -45,6 +45,17 @@ export function totals(entries) {
   const income = sum(entries.filter(e => e.type === 'income'));
   return { count: entries.length, expenses, income, net: income - expenses };
 }
+export function budgetSummary(entries, budget = {}) {
+  const limit = sum(Object.values(budget).filter(n => n > 0).map(amount => ({amount})));
+  const spent = totals(entries.filter(e => budget[e.categoryId] > 0)).expenses;
+  return { limit:limit || null, spent, remaining:limit ? limit - spent : null };
+}
+export function matchesMovement(entry, query, categoryName = '', paymentName = '') {
+  const text = fold(query).replace(/\s+/g, ' ');
+  if (!text) return true;
+  const parsed = parseAmountToken(text);
+  return (parsed !== null && parsed === entry.amount) || fold(`${entry.note} ${entry.raw} ${categoryName} ${paymentName} ${entry.amount}`).replace(/\s+/g, ' ').includes(text);
+}
 export function initialState() {
   return { schemaVersion: SCHEMA, revision: 0, entries: [], categories: buildSeedCategories(), paymentMethods: buildSeedPaymentMethods(), monthlyBudgets: {}, legacyBudgets: {}, reviewedMonths: [], favorites: [], settings: { theme: 'system', privacy: false }, createdAt: new Date().toISOString() };
 }

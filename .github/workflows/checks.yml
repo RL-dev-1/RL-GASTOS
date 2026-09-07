@@ -23,6 +23,7 @@ jobs:
           node tests/e2e.mjs
       - run: node tests/visual.mjs
       - run: node tests/budgets.mjs
+      - run: node tests/regressions.mjs
       - name: Test published preview
         if: github.event_name == 'pull_request' && matrix.browser == 'chromium'
         env:

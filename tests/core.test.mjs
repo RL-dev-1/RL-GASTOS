@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { initialState, clone, parseLine, parseAmountToken, saveMovement, setDeleted, makeBackup, decodeBackup, validateState, totals, activeEntries, inPeriod, dayKey, validDay, shiftMonth, exportCSV, exportForChatGPT, possibleDuplicate } from '../src/core.mjs';
+import { initialState, clone, parseLine, parseAmountToken, saveMovement, setDeleted, makeBackup, decodeBackup, validateState, totals, activeEntries, inPeriod, dayKey, validDay, shiftMonth, exportCSV, exportForChatGPT, possibleDuplicate, budgetSummary, matchesMovement } from '../src/core.mjs';
 const input = (overrides = {}) => ({ id:'test-entry',amount:85500,type:'expense',note:'Almuerzo con amigos',raw:'85.500 almuerzo efectivo',categoryId:'cat_almuerzo',paymentMethodId:'pay_efectivo',occurredOn:'2026-09-05',...overrides });
 const fixture = () => saveMovement(initialState(),input());
 test('amount formats and ambiguous formats',()=>{
@@ -67,3 +67,16 @@ test('export carries selected totals, complete history and tombstones',()=>{
   const ex=exportForChatGPT(s,{month:'2026-09'});assert.equal(ex.controls.selected.expenses,85500);assert.equal(ex.controls.deletedCount,1);assert.equal(ex.data.entries.length,2);assert.equal(ex.completeHistory,true);
 });
 test('sum overflow is rejected before confirmation',()=>{assert.throws(()=>totals([{type:'expense',amount:Number.MAX_SAFE_INTEGER},{type:'expense',amount:1}]),/seguro/);});
+test('no positive category limits means undefined budget; partial limits only count matching expenses',()=>{
+  const entries=[input({amount:85000}),input({amount:50000,categoryId:'cat_hogar'})];
+  assert.deepEqual(budgetSummary(entries),{limit:null,spent:0,remaining:null});
+  assert.deepEqual(budgetSummary(entries,{cat_almuerzo:0}),{limit:null,spent:0,remaining:null});
+  assert.deepEqual(budgetSummary(entries,{cat_almuerzo:100000,cat_hogar:0}),{limit:100000,spent:85000,remaining:15000});
+  assert.equal(budgetSummary(entries,{cat_almuerzo:50000}).remaining,-35000);
+});
+test('search recognizes displayed guarani amounts and accents without relying on raw input',()=>{
+  const entry=input({amount:85000,raw:'',note:'Café para llevar'});
+  for(const query of ['85.000','85,000','₲ 85.000','85000','85k','cafe','  CAFÉ  '])assert.equal(matchesMovement(entry,query),true,query);
+  assert.equal(matchesMovement(entry,'86.000'),false);
+  assert.equal(matchesMovement(entry,'itau','','Itaú'),true);
+});
