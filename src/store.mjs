@@ -1,5 +1,6 @@
 import { clone, initialState, decodeBackup, validateState } from './core.mjs';
 export class ConflictError extends Error { constructor() { super('Hay cambios guardados desde otra pestaña. Recargá los datos antes de continuar; tu formulario sigue abierto.'); this.name = 'ConflictError'; } }
+export const draftVersion = value => value ? (value.token || value.updatedAt || 'legacy') : null;
 function legacyState(storage) {
   const read = key => { const raw = storage.getItem(key); return raw === null ? null : JSON.parse(raw); };
   const entries = read('rl_entries');
@@ -64,10 +65,38 @@ export class Store {
     });
     return next;
   }
+  // Recovery is explicit. Compare the entire observed JSON snapshot, including a
+  // damaged revision, and retain the original without touching older recoveries.
+  async recover(candidate, observed) {
+    const next = clone(validateState(candidate)), fingerprint = JSON.stringify(observed);
+    next.revision = Number.isSafeInteger(observed?.revision) && observed.revision >= 0 && observed.revision < Number.MAX_SAFE_INTEGER ? observed.revision + 1 : 0;
+    await this.transaction(['state','recovery'], (stores, tx) => {
+      const req = stores.state.get('current');
+      req.onsuccess = () => {
+        if (JSON.stringify(req.result || null) !== fingerprint) { tx.failure = new ConflictError(); tx.abort(); return; }
+        if (req.result) stores.recovery.put({ at:new Date().toISOString(), reason:'damaged-state', state:req.result }, 'damaged-' + crypto.randomUUID());
+        stores.state.put(next, 'current');
+      };
+    });
+    return next;
+  }
+  async saveEntryDraft(value, key, expectedToken) {
+    return this.transaction(['drafts'], stores => {
+      const req = stores.drafts.get(key);
+      req.onsuccess = () => {
+        // A concurrent edit must remain recoverable even if this tab writes next.
+        if (req.result && draftVersion(req.result) !== expectedToken) {
+          const copyId = crypto.randomUUID();
+          stores.drafts.put({ ...req.result, draftId:copyId, conflictCopy:true }, copyId);
+        }
+        stores.drafts.put(value, key);
+      };
+    });
+  }
   deleteDraft(drafts, key, token) {
     if (!token) { drafts.delete(key); return; }
     const req = drafts.get(key);
-    req.onsuccess = () => { if (req.result?.token === token) drafts.delete(key); };
+    req.onsuccess = () => { if (draftVersion(req.result) === token) drafts.delete(key); };
   }
   async draft(value, key = 'entry', token = null) { return this.transaction(['drafts'], s => value === null ? this.deleteDraft(s.drafts, key, token) : s.drafts.put(value, key)); }
   getDraft(key = 'entry') { return new Promise((resolve, reject) => { const req = this.db.transaction('drafts').objectStore('drafts').get(key); req.onsuccess = () => resolve(req.result || null); req.onerror = () => reject(req.error); }); }

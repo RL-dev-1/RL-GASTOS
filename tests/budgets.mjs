@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 const require = createRequire(import.meta.url);
 const browserName = process.env.TEST_BROWSER || 'chromium';
-const browser = await require(process.env.PLAYWRIGHT_MODULE || 'playwright')[browserName].launch({ headless:true });
+const browser = await require(process.env.PLAYWRIGHT_MODULE || 'playwright')[browserName].launch({ headless:true, ...(process.env.CHROME_EXECUTABLE ? { executablePath:process.env.CHROME_EXECUTABLE } : {}) });
 const base = process.env.TEST_BASE_URL || 'http://127.0.0.1:8080';
 const report = [];
 mkdirSync('artifacts', { recursive:true });
