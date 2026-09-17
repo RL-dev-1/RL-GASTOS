@@ -58,7 +58,7 @@ export class Store {
       req.onsuccess = () => {
         const current = req.result;
         if ((current?.revision ?? -1) !== expectedRevision) { tx.failure = new ConflictError(); tx.abort(); return; }
-        if (recovery && current) stores.recovery.put({ at: new Date().toISOString(), reason: 'before-replacement', state: current }, 'before-replacement');
+        if (recovery && current) stores.recovery.put({ at: new Date().toISOString(), reason: 'before-replacement', state: current }, 'before-replacement-' + crypto.randomUUID());
         stores.state.put(next, 'current');
         if (clearDraft) this.deleteDraft(stores.drafts, clearDraft, clearDraftToken);
       };
@@ -80,7 +80,7 @@ export class Store {
     });
     return next;
   }
-  async saveEntryDraft(value, key, expectedToken) {
+  async saveVersionedDraft(value, key, expectedToken) {
     return this.transaction(['drafts'], stores => {
       const req = stores.drafts.get(key);
       req.onsuccess = () => {
@@ -93,6 +93,8 @@ export class Store {
       };
     });
   }
+  saveEntryDraft(value, key, expectedToken) { return this.saveVersionedDraft(value, key, expectedToken); }
+  saveBudgetDraft(value, key, expectedToken) { return this.saveVersionedDraft(value, key, expectedToken); }
   deleteDraft(drafts, key, token) {
     if (!token) { drafts.delete(key); return; }
     const req = drafts.get(key);

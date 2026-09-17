@@ -7,6 +7,7 @@ App personal de gastos en guaraníes. Funciona sin backend, cuenta ni dependenci
 - **Registrar:** monto al principio (`85.500 almuerzo itaú black`), revisar y guardar. También hay formulario manual y revisión editable de cargas múltiples. Categoría/medio desconocidos requieren selección.
 - **Movimientos:** buscar, filtrar por mes o rango, editar, repetir desde favoritos y enviar a papelera. Restaurar mantiene la identidad original.
 - **Presupuestos:** límites por mes; copiar el anterior o aplicar explícitamente los límites del backup. Cero/vacío significa sin límite por categoría; si todos están en cero, el resumen muestra «Sin definir». El restante compara únicamente los gastos de categorías con límite positivo; el total suma esos límites y no representa saldo bancario.
+- **Barras de Inicio:** las categorías con límite muestran el porcentaje consumido del límite de ese mes. Si lo superan, la barra queda llena y roja, el porcentaje conserva el exceso sobre 100% y se indica el importe excedido. Las categorías sin límite muestran su participación en el gasto total del mes.
 - **Exportar:** CSV del mes/historial, JSON para ChatGPT con historial completo y controles, backup restaurable y extracto imprimible. Compartir el último archivo está disponible en Ajustes cuando el navegador lo permite.
 
 ## Datos y recuperación
@@ -15,7 +16,7 @@ Al abrir por primera vez, una instalación existente con esquema v2 se valida y 
 
 El movimiento se confirma solo cuando termina la transacción. Las escrituras comparan la revisión actual dentro de una transacción para rechazar pestañas desactualizadas. La operación conserva un ID al reintentar. Los borradores se guardan durante la edición; el borrador confirmado se elimina en la misma transacción que guarda el movimiento. Las importaciones son reemplazos explícitos: generan una copia interna previa de manera atómica.
 
-Los borradores recuperados no se vuelven a leer desde un formulario que aún no se abrió. Cada escritura lleva un token: guardar o descartar una versión no elimina una edición más reciente de otra pestaña. Si dos pestañas escriben sobre el mismo borrador, la versión desplazada queda como «Copia conservada de otra pestaña» en Ajustes → Recuperación y borradores. Los IDs de movimientos se conservan; una copia de una operación ya guardada no se inserta silenciosamente como otro gasto.
+Los borradores recuperados no se vuelven a leer desde un formulario que aún no se abrió. Cada escritura lleva un token: guardar o descartar una versión no elimina una edición más reciente de otra pestaña. Si dos pestañas escriben sobre el mismo borrador de movimiento o presupuesto, la versión desplazada queda como «Copia conservada de otra pestaña» en Ajustes → Recuperación y borradores. Los IDs de movimientos se conservan; una copia de una operación ya guardada no se inserta silenciosamente como otro gasto.
 
 Si un estado v3 dañado impide abrir la app, la restauración compara el estado observado en la vista previa y conserva el original en una copia interna independiente. Esa copia dañada puede descargarse como JSON de recuperación para diagnóstico; no se presenta como un backup válido. La restauración admite backups de la propia app mayores de 25 MB, con la misma validación estructural y vista previa. Archivos muy grandes requieren memoria suficiente en el navegador; un fallo de lectura/validación no reemplaza los datos actuales.
 
@@ -23,7 +24,7 @@ Estas correcciones mantienen la base IndexedDB, la versión de esquema 3 y los f
 
 **IndexedDB y las copias internas siguen siendo locales.** Un backup externo es necesario ante pérdida del teléfono o borrado de los datos del navegador. La app recuerda generar uno después de siete días; no promete escribir automáticamente en iCloud/Drive. “Generado” tampoco confirma que el archivo se guardó externamente.
 
-En Ajustes → Recuperación se pueden descargar las copias de migración y anterior al último reemplazo. No hay borrado permanente desde la interfaz. Los borradores de otras sesiones también se pueden recuperar.
+En Ajustes → Recuperación se pueden descargar las copias de migración y las copias anteriores a cada reemplazo. Una nueva restauración conserva las copias anteriores, incluida la copia única que guardaban versiones previas. No hay borrado permanente desde la interfaz. Los borradores de otras sesiones también se pueden recuperar.
 
 ## Excel / ChatGPT
 

@@ -21,6 +21,7 @@ let draftKey;
 try { draftKey = sessionStorage.getItem('rl-draft-key') || uid(); sessionStorage.setItem('rl-draft-key', draftKey); } catch { draftKey = uid(); }
 const channel = 'BroadcastChannel' in window ? new BroadcastChannel('rl-gastos-v3') : null;
 let noticeTimer;
+let listedRecoveries = [];
 let requestedUpdate = false;
 const closingPanels = new WeakMap();
 function openPanel(dialog) {
@@ -103,7 +104,18 @@ function renderHome() {
     comparison = previous ? `${money(Math.abs(total.expenses - previous))} ${total.expenses > previous ? 'más' : 'menos'} que ${monthLabel(prev)}. Ambos meses revisados.` : 'El mes anterior revisado no tiene gastos.';
   }
   const favoriteRows = state.entries.filter(e => state.favorites.includes(e.id) && !e.deletedAt);
-  const categoryRows = categories.length ? categories.map(([id, spent]) => `<button class="category" data-action="category" data-id="${h(id)}"><div class="row"><span>${h(catName(id))}</span><strong>${amount(spent)}</strong></div><div class="bar"><span style="width:${Math.round(spent / total.expenses * 100)}%"></span></div><div class="row small muted"><span>${Math.round(spent / total.expenses * 100)}% del gasto</span><span>${budget?.[id] ? 'Límite ' + amount(budget[id]) : 'Sin límite'}</span></div></button>`).join('') : '<p class="muted">Sin gastos en este mes.</p>';
+  const categoryRows = categories.length ? categories.map(([id, spent]) => {
+    const categoryLimit = budget?.[id], hasLimit = categoryLimit > 0;
+    const percent = spent / (hasLimit ? categoryLimit : total.expenses) * 100;
+    const percentLabel = new Intl.NumberFormat('es-PY', { maximumFractionDigits:1 }).format(percent);
+    const exceeded = hasLimit && spent > categoryLimit;
+    return `<button class="category${exceeded ? ' over-budget' : ''}" data-action="category" data-id="${h(id)}">
+      <div class="row"><span>${h(catName(id))}</span><strong>${amount(spent)}</strong></div>
+      <div class="bar" aria-hidden="true"><span style="width:${Math.min(percent, 100)}%"></span></div>
+      <div class="row small muted"><span>${percentLabel}% ${hasLimit ? 'del límite' : 'del gasto total del mes'}</span><span>${hasLimit ? 'Límite ' + amount(categoryLimit) : 'Sin límite'}</span></div>
+      ${exceeded ? `<div class="small danger category-excess">Excedido por ${amount(spent - categoryLimit)}</div>` : ''}
+    </button>`;
+  }).join('') : '<p class="muted">Sin gastos en este mes.</p>';
   return title('Resumen') + monthNav() +
     (draft ? '<button class="button wide resume-button" data-action="resume">Continuar borrador pendiente</button>' : '') + `
     <div class="grid home-grid">
@@ -170,17 +182,17 @@ function captureBudgetForm(form = $('budget-form')) {
   $('budget-total').innerHTML = amount(budgetTotal(values));
   updateBudgetFormStatus();
   // Start the transaction on each edit, before iOS can suspend the page.
-  store.draft(pending, pending.draftId).catch(() => {
+  store.saveBudgetDraft(pending, pending.draftId, previous?.token || null).catch(() => {
     if (budgetDrafts.get(month) !== pending) return;
     pending.storageError = 'No se pudo conservar el borrador. Mantené la app abierta y volvé a intentar guardar.';
     updateBudgetFormStatus();
   });
   return pending;
 }
-async function submitBudget(form) {
+async function submitBudget(form, options = {}) {
   if (busy) return;
   const pending = captureBudgetForm(form), month = pending.month;
-  if (pending.base !== budgetFingerprint(state.monthlyBudgets[month])) throw new Error('El presupuesto de este mes cambió. Tus montos siguen en el borrador. Usá «Descartar cambios y ver guardado» para revisarlo.');
+  if (pending.base !== budgetFingerprint(state.monthlyBudgets[month])) throw new Error('El presupuesto de este mes cambió. Tus montos siguen en el borrador. Compará los importes y usá «Revisar y aplicar borrador» para confirmarlos.');
   const values = {};
   for (const [id, value] of Object.entries(pending.values)) {
     const text = value.trim(), n = text === '' || /^0+$/.test(text) ? 0 : parseAmountToken(text);
@@ -190,7 +202,13 @@ async function submitBudget(form) {
   const next = clone(state);
   next.monthlyBudgets[month] = values;
   validateState(next);
-  await commit(next, 'Presupuesto guardado para ' + monthLabel(month) + '. Total: ' + money(budgetTotal(values)) + '.', { clearDraft:pending.draftId, clearDraftToken:pending.token });
+  await commit(next, 'Presupuesto guardado para ' + monthLabel(month) + '.' + (state.settings.privacy ? '' : ' Total: ' + money(budgetTotal(values)) + '.'), { ...options, clearDraft:pending.draftId, clearDraftToken:pending.token });
+}
+function budgetConflictReview(month, pending) {
+  const saved = state.monthlyBudgets[month] || {};
+  if (!pending || pending.base === budgetFingerprint(saved)) return '';
+  const rows = state.categories.filter(c => c.type === 'expense' && String(saved[c.id] || '') !== String(pending.values[c.id] || '')).map(c => `<p><strong>${h(c.name)}</strong><br>Guardado: ${saved[c.id] ? amount(saved[c.id]) : 'Sin límite'} · Borrador: <span class="private">${h(pending.values[c.id] || 'Sin límite')}</span></p>`).join('');
+  return `<div class="hint"><strong>Comparar antes de reemplazar</strong>${rows}<p>Se conservará una copia interna del presupuesto guardado.</p><button class="button" type="button" data-action="review-budget-draft">Revisar y aplicar borrador</button></div>`;
 }
 function renderBudgets() {
   const saved = state.monthlyBudgets[selectedMonth], known = !!saved, pending = budgetDrafts.get(selectedMonth);
@@ -205,6 +223,7 @@ function renderBudgets() {
         <div class="row"><strong>Total</strong><strong id="budget-total">${amount(budgetTotal(values))}</strong></div>
       </div>
       <p class="small muted" id="budget-status" role="status">${h(budgetStatus(selectedMonth))}</p>
+      ${budgetConflictReview(selectedMonth, pending)}
       <div class="actions"><button class="button primary" type="submit" data-write>Guardar presupuesto</button><button class="button" type="button" data-action="copy-budget">Copiar mes anterior</button></div>
       <button class="link-button" id="discard-budget" type="button" data-action="discard-budget" ${pending ? '' : 'hidden'}>Descartar cambios y ver guardado</button>
       ${Object.keys(state.legacyBudgets).length ? '<button class="link-button" type="button" data-action="legacy-budget">Usar los límites de tu backup en este mes</button>' : ''}
@@ -385,6 +404,16 @@ document.addEventListener('click',async e=>{
     if(action==='clear-filters'){filters={category:'',method:'',search:'',type:'',trash:false,from:'',to:''};render();}
     if(action==='copy-budget'||action==='legacy-budget'){const values=action==='legacy-budget'?state.legacyBudgets:state.monthlyBudgets[shiftMonth(selectedMonth,-1)];if(!values)throw new Error('El mes anterior no tiene presupuesto definido.');document.querySelectorAll('#budget-form input').forEach(input=>{input.value=values[input.name]??'';});captureBudgetForm();notice('Límites copiados al formulario. Revisalos y guardá.');}
     if(action==='discard-budget'){const pending=budgetDrafts.get(selectedMonth);if(pending && confirm('¿Descartar los cambios de este mes y volver al presupuesto guardado?')){await store.draft(null,pending.draftId,pending.token);budgetDrafts.delete(selectedMonth);render();}}
+    if(action==='review-budget-draft'){
+      const pending=captureBudgetForm(),month=pending.month;
+      if(confirm('¿Guardar los importes del borrador para ' + monthLabel(month) + '? Se conservará una copia interna del presupuesto actual.')){
+        const restored={...pending,draftId:'budget-' + month,base:budgetFingerprint(state.monthlyBudgets[month]),token:uid(),updatedAt:new Date().toISOString()};
+        delete restored.conflictCopy;delete restored.storageError;
+        await store.saveBudgetDraft(restored,restored.draftId,pending.token);
+        budgetDrafts.set(month,restored);
+        await submitBudget($('budget-form'),{recovery:true});
+      }
+    }
     if(action==='review-month'){const next=clone(state);next.reviewedMonths=next.reviewedMonths.includes(selectedMonth)?next.reviewedMonths.filter(m=>m!==selectedMonth):[...next.reviewedMonths,selectedMonth];await commit(next,'Estado de revisión guardado.');}
     if(action==='backup') await generateBackup();
     if(action==='chatgpt'){download(JSON.stringify(exportForChatGPT(state,{month:selectedMonth}),null,2),`rl_gastos_chatgpt_${selectedMonth}.json`,'application/json');notice('Exportación generada. Incluye historial completo y controles.');}
@@ -398,10 +427,20 @@ document.addEventListener('click',async e=>{
     if(action==='config-edit'){const c=(button.dataset.kind==='category'?state.categories:state.paymentMethods).find(c=>c.id===id);$('config-id').value=id;$('config-name').value=c.name;$('config-kind').value=c.type||'method';$('config-kind').disabled=true;$('config-keywords').value=(c.keywords||[]).join(', ');$('config-name').focus();}
     if(action==='persistent'){const granted=await navigator.storage?.persist?.();notice(granted?'El navegador concedió conservación del almacenamiento. Mantené igualmente un backup.':'El navegador no concedió conservación adicional. Guardá un backup externo.');}
     if(action==='share-file'){if(!latestFile)throw new Error('Generá primero el archivo que querés compartir.');if(navigator.canShare?.({files:[latestFile]}))await navigator.share({files:[latestFile],title:'RL Gastos'});else notice('Compartir no está disponible aquí. Usá el archivo descargado.');}
-    if(action==='recoveries'){const list=await store.recoveries();$('recoveries-list').innerHTML=list.map((r,i)=>`<button class="link-button" data-action="recovery-download" data-index="${i}">${h(r.reason)} · ${h(dayKey(r.at))} · Descargar</button>`).join('')||'Sin copias internas.';}
-    if(action==='recovery-download'){const list=await store.recoveries(),item=list[Number(button.dataset.index)];let payload;try{payload=makeBackup(item.state);}catch{payload={app:'RL Gastos',kind:'recovery-raw',reason:item.reason,at:item.at,data:item.state};}download(JSON.stringify(payload,null,2),'rl_gastos_recuperacion.json','application/json');}
-    if(action==='drafts'){const list=await store.drafts();$('drafts-list').innerHTML=list.map((d,i)=>`<button class="link-button" data-action="draft-load" data-index="${i}">${d.conflictCopy ? 'Copia conservada de otra pestaña' : 'Borrador'} ${h(d.updatedAt?.slice(0,16)||'')} · Abrir</button>`).join('')||'Sin borradores.';}
-    if(action==='draft-load'){const list=await store.drafts();loadDraft(list[Number(button.dataset.index)]);await closePanel($('settings'));openEditor();}
+    if(action==='recoveries'){listedRecoveries=await store.recoveries();$('recoveries-list').innerHTML=listedRecoveries.map((r,i)=>`<button class="link-button" data-action="recovery-download" data-index="${i}">${h(r.reason)} · ${h(r.at.slice(0,19).replace('T',' '))} UTC · ${Array.isArray(r.state?.entries) ? movementCount(r.state.entries.length) + ' · ' : ''}Descargar</button>`).join('')||'Sin copias internas.';}
+    if(action==='recovery-download'){const item=listedRecoveries[Number(button.dataset.index)];if(!item)throw new Error('Volvé a consultar las copias internas.');let payload;try{payload=makeBackup(item.state);}catch{payload={app:'RL Gastos',kind:'recovery-raw',reason:item.reason,at:item.at,data:item.state};}download(JSON.stringify(payload,null,2),'rl_gastos_recuperacion.json','application/json');}
+    if(action==='drafts'){
+      const list=[...await store.drafts(),...await store.drafts('budget')];
+      $('drafts-list').innerHTML=list.map(d=>`<button class="link-button" data-action="draft-load" data-id="${h(d.draftId || 'entry')}">${d.kind==='budget' ? 'Presupuesto ' + h(monthLabel(d.month)) + ' · ' : ''}${d.conflictCopy ? 'Copia conservada de otra pestaña' : 'Borrador'} ${h(d.updatedAt?.slice(0,16)||'')} · Abrir</button>`).join('')||'Sin borradores.';
+    }
+    if(action==='draft-load'){
+      const saved=await store.getDraft(id);if(!saved)throw new Error('Este borrador ya no está disponible. Volvé a consultar la lista.');
+      if(saved.kind==='budget'){
+        if(!validMonth(saved.month)||!saved.values||typeof saved.base!=='string')throw new Error('El borrador de presupuesto no es válido.');
+        if(budgetDrafts.get(saved.month)?.storageError)throw new Error('Conservá primero el presupuesto pendiente antes de abrir otro borrador.');
+        budgetDrafts.set(saved.month,saved);selectedMonth=saved.month;await closePanel($('settings'));navigate('budgets');
+      }else{loadDraft(saved);await closePanel($('settings'));openEditor();}
+    }
     if(action==='update'){if(busy)throw new Error('Esperá a que termine el guardado.');if(draft){captureEditor();if(!(await persistDraft()))throw new Error('No se pudo conservar el borrador. Volvé a intentar actualizar.');}requestedUpdate=true;if(waitingWorker)waitingWorker.postMessage({type:'SKIP_WAITING'});else location.reload();}
     if(action==='print'){const entries=activeEntries(state).filter(e=>inPeriod(e,{month:selectedMonth}));const t=totals(entries);$('main').innerHTML=title('Extracto mensual',h(monthLabel(selectedMonth)))+`<p>${movementCount(t.count)} · Gastos ${amount(t.expenses)} · Ingresos ${amount(t.income)}</p><div class="card">${rows(sorted(entries))}</div>`;window.print();render();}
   }catch(err){if(err.name!=='AbortError')formError(err.message);}
@@ -415,7 +454,7 @@ async function start() {
     state=await store.open();applyTheme();draft=await store.getDraft(draftKey);
     if(!draft){const list=await store.drafts();draft=list.sort((a,b)=>(b.updatedAt||'').localeCompare(a.updatedAt||''))[0]||null;if(draft?.draftId)draftKey=draft.draftId;}
     for (const pending of await store.drafts('budget')) {
-      if (validMonth(pending.month) && pending.values && typeof pending.base === 'string') budgetDrafts.set(pending.month, pending);
+      if (!pending.conflictCopy && validMonth(pending.month) && pending.values && typeof pending.base === 'string') budgetDrafts.set(pending.month, pending);
     }
     loadDraft(draft);
     render();
