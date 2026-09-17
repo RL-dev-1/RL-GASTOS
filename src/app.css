@@ -93,6 +93,8 @@ p { margin:8px 0; }
 .category:last-child { border:0; padding-bottom:0; }
 .bar { height:4px; margin:12px 0 6px; border-radius:4px; background:var(--soft); overflow:hidden; }
 .bar span { display:block; height:100%; border-radius:inherit; background:var(--accent); }
+.category.over-budget .bar span { background:var(--red); }
+.category-excess { margin-top:6px; }
 .danger { color:var(--red); }
 .warning { color:var(--gold); }
 .button,.link-button { display:inline-flex; justify-content:center; align-items:center; gap:8px; min-height:44px; font-size:var(--text-sm); font-weight:600; line-height:1.35; }

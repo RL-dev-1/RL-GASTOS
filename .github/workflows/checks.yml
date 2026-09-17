@@ -23,6 +23,8 @@ jobs:
           node tests/e2e.mjs
       - run: node tests/visual.mjs
       - run: node tests/budgets.mjs
+      - run: node tests/category-bars.mjs
+      - run: node tests/data-safety.mjs
       - run: node tests/regressions.mjs
       - name: Test published preview
         if: github.event_name == 'pull_request' && matrix.browser == 'chromium'
@@ -32,6 +34,8 @@ jobs:
           node tests/wait-preview.mjs
           node tests/e2e.mjs
           node tests/budgets.mjs
+          node tests/category-bars.mjs
+          node tests/data-safety.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
